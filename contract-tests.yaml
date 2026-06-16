@@ -1,0 +1,26 @@
+# Конфигурация проверки совместимости синхронных контрактов (OpenAPI).
+# Симметрична pinout-asyncapi/contract-tests.yaml.
+contract_tests:
+  # Спецификация потребителя (локальная)
+  consumer:
+    spec_path: "../api-specification/openapi.yml"
+    name: "mq-rest-sync-adapter"
+    # Операции, на которые опирается потребитель
+    operations:
+      - path: "/balance"
+        method: "GET"
+
+  # Спецификация поставщика (master = прод)
+  provider:
+    # Источник: spec_url (удалённый master) ИЛИ spec_path (локальный, для офлайн-тестов) — как в async
+    spec_url: "https://git.codemonsters.team/guides/wallet-balance/-/raw/main/api-specification/openapi.yml"
+    # spec_path: "./testdata/provider_openapi.yml"
+    name: "wallet-balance-service"
+
+  # Настройки проверки
+  settings:
+    log_level: "info"          # debug, info, warn, error
+    save_json_report: true
+    json_report_file: "compatibility_report.json"
+    timeout: 30                # таймаут загрузки спеки поставщика, сек
+    ignore_warnings: false

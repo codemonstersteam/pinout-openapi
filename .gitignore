@@ -1,0 +1,13 @@
+# Go
+/bin/
+*.exe
+*.test
+*.out
+
+# Отчёты валидации
+compatibility_report.json
+
+# IDE/OS
+.idea/
+.vscode/
+.DS_Store
