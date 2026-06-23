@@ -92,6 +92,8 @@ JSON-отчёт — в общем формате экосистемы, опре�
 
 Репозиторий разрабатывается по скиллам [service-template](https://github.com/ubik-life/service-template/) — см. [`CLAUDE.md`](./CLAUDE.md). Пакет проектирования MVP — [`docs/design/contract-validate/`](./docs/design/contract-validate/). Статус и тикеты — [`docs/design/contract-validate/backlog.md`](./docs/design/contract-validate/backlog.md). Покрытие рисков сборки/валидации инструментами и проверками — [`docs/risk-coverage.md`](./docs/risk-coverage.md).
 
+Концептуальный дизайн (**C4**: контейнер/компонент = дерево модулей) и системный **use case по Коберну** — [`docs/design/contract-validate/c4.md`](./docs/design/contract-validate/c4.md). Карта всей экосистемы (C4 контекст) — в [концепте pinout](../pinout/README.md).
+
 ## Статус
 
 📋 Проектирование (MVP — эпик E1 в [бэклоге экосистемы](../pinout/backlog.md)). Код ещё не реализован: сначала пакет проектирования и handoff-аппрув оператора по скиллу `program-design`.
