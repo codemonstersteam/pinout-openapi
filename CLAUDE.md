@@ -4,7 +4,9 @@
 
 ## Методология: скиллы service-template (по ссылке, не копируем)
 
-Разработка ведётся строго по скиллам репозитория [ubik-life/service-template](https://github.com/ubik-life/service-template/). Источник — upstream, локальных копий не держим. Применяем в порядке:
+> Точка входа агента — [`AGENTS.md`](./AGENTS.md) (там же блок «Resume here»).
+
+Разработка ведётся строго по скиллам репозитория [ubik-life/service-template](https://github.com/ubik-life/service-template/). Источник — upstream, локальных копий не держим. **Закреплённый коммит: `5ad8347c38ea7f07bd0620ebeef5030ca3431efd`** (2026-06-17) — при расхождении с `main` использовать его. Применяем в порядке:
 
 | Этап | Скилл | Ссылка |
 |---|---|---|

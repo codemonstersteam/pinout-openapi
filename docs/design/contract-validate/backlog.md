@@ -5,15 +5,16 @@
 ## Тикеты
 
 ### T01 — срез validate-contract (MVP)
-Реализация по [`slices/01-validate-contract.md`](./slices/01-validate-contract.md). Bottom-up: доменные конструкторы → чистая логика сравнения → I/O-модули → head-труба → ингресс (cobra) → регистрация в `cmd`.
+Реализация по [`slices/01-validate-contract.md`](./slices/01-validate-contract.md); пошаговое задание исполнителю — [`impl-brief-01.md`](./impl-brief-01.md). Bottom-up: доменные конструкторы → чистая логика сравнения → I/O-модули → head-труба → ингресс (cobra) → регистрация в `cmd`.
 
 - [ ] `NewOperationKey`, `NewConfig`, `NewContractValidate` + юнит-тесты (N по таблице).
-- [ ] `ValidateOperations` + подфункции сравнения (`compareSchemas` рекурсивно, `$ref`) + юнит-тесты.
-- [ ] I/O: `ConfigStore`, `SpecClient` (HTTP/файл + парсер OpenAPI kin-openapi), `ReportWriter`.
+- [ ] `ValidateOperations` + подфункции сравнения (`findProviderOperation`, `compareRequest/Responses/StatusCodes/ContentTypes/Schemas`) на развёрнутых ($ref-free) схемах + юнит-тесты.
+- [ ] Обработка `$ref` в `compareSchemas` по плану [`ref-handling.md`](./ref-handling.md): разведка → A (сравнение, local-ref прозрачны) → C (детект цикла памятью пар); внешние ref → `SPEC_PARSE_ERROR`. `NOT_VERIFIED` — отложено (триггер в плане).
+- [ ] I/O: `ConfigStore`, `SpecClient` (HTTP/файл + парсер kin-openapi, **резолв `$ref`**), `ReportWriter`, `Clock`.
 - [ ] head `ValidateContract` (ROP-труба).
-- [ ] ингресс `cmd validate` (cobra) + exit codes 0/1/2/3.
-- [ ] `Report` в общем JSON-формате экосистемы (согласовать с эпиком E0 `pinout-asyncapi`).
-- [ ] Компонентные тесты `component-tests/validate.feature` (6 сценариев) зелёные.
+- [ ] ингресс `cmd validate` (cobra) + exit codes 0/1/2/3 (таблица `ErrorCode→exit` в `contracts-graph.md`).
+- [ ] `ToReportDTO`: `Report` → канонический JSON экосистемы (`validator/interaction/spec_ref/version/generated_at`); согласовать с E0 `pinout-asyncapi`.
+- [ ] Компонентные тесты `component-tests/validate.feature` (7 сценариев) зелёные.
 - [ ] README/`api-specification` актуальны (skill `documentation`, `doc-quality-review`).
 
 ## Definition of Done пакета
