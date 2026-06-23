@@ -50,7 +50,7 @@ JSON-отчёт — в общем формате экосистемы, опре�
 
 ## Методология и проектирование
 
-Репозиторий разрабатывается по скиллам [service-template](https://github.com/ubik-life/service-template/) — см. [`CLAUDE.md`](./CLAUDE.md). Пакет проектирования MVP — [`docs/design/contract-validate/`](./docs/design/contract-validate/). Статус и тикеты — [`docs/design/contract-validate/backlog.md`](./docs/design/contract-validate/backlog.md).
+Репозиторий разрабатывается по скиллам [service-template](https://github.com/ubik-life/service-template/) — см. [`CLAUDE.md`](./CLAUDE.md). Пакет проектирования MVP — [`docs/design/contract-validate/`](./docs/design/contract-validate/). Статус и тикеты — [`docs/design/contract-validate/backlog.md`](./docs/design/contract-validate/backlog.md). Покрытие рисков сборки/валидации инструментами и проверками — [`docs/risk-coverage.md`](./docs/risk-coverage.md).
 
 ## Статус
 

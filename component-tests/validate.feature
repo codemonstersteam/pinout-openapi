@@ -3,7 +3,7 @@ Feature: Валидация совместимости синхронного к
   с master-OpenAPI поставщика, по конфигурации contract-tests.yaml.
 
   # Контракт-первый: режимы отказа взяты из README/контракта CLI, не из кода.
-  # N_тестов = 1 (happy) + 5 (различимых режимов отказа) = 6.
+  # N_тестов = 1 (happy) + 6 (различимых режимов отказа) = 7.
 
   Scenario: Совместимая пара контрактов
     Given конфиг указывает на спеку потребителя и master-спеку поставщика
@@ -30,6 +30,12 @@ Feature: Валидация совместимости синхронного к
     When запускаю "validate ./contract-tests.yaml"
     Then exit code 1
     And отчёт содержит ошибку с кодом "RESPONSE_INCOMPATIBLE"
+
+  Scenario: Операция конфига отсутствует у самого потребителя
+    Given операция из contract-tests.yaml отсутствует в спеке потребителя
+    When запускаю "validate ./contract-tests.yaml"
+    Then exit code 2
+    And вывод содержит код ошибки "CONSUMER_OPERATION_NOT_FOUND"
 
   Scenario: Конфигурация отсутствует или невалидна
     Given путь к contract-tests.yaml не существует
