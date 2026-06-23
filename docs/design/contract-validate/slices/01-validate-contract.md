@@ -1,6 +1,6 @@
 # Срез 01 — validate-contract
 
-Вход: CLI `validate <config>`. Выход: exit code + JSON-отчёт.
+Вход: CLI `validate <config>`. Выход: exit code + JSON-отчёт. Концептуальный дизайн (C4 Container/Component) — [`../c4.md`](../c4.md).
 
 ## Дерево модулей
 
