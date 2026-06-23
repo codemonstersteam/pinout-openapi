@@ -17,6 +17,12 @@
 - [ ] Компонентные тесты `component-tests/validate.feature` (7 сценариев) зелёные.
 - [ ] README/`api-specification` актуальны (skill `documentation`, `doc-quality-review`).
 
+## Документация проектирования (готово)
+
+- [x] Концептуальный дизайн **C4** — [`c4.md`](./c4.md): C2 (контейнер) + C3 (дерево модулей среза) + системный **use case по Коберну** (UC-1).
+- [x] README по скиллу `documentation` (стек, pipe «как работает», таблица сбоев, ссылка на C4).
+- [x] Покрытие рисков — [`../../risk-coverage.md`](../../risk-coverage.md); лог проектирования — [`../../../devlog/`](../../../devlog/).
+
 ## Definition of Done пакета
 
 - [ ] Все 12 шагов `program-design` пройдены.
