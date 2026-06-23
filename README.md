@@ -13,6 +13,15 @@
 
 Спека поставщика в Git — источник истины. Подход и его обоснование (несущий инвариант «сервис конформен своей спеке ⇒ совместимость спек = реальная совместимость», границы, сравнение с генерацией либ) описаны в [концепте pinout](../pinout/README.md). Семантику использования контракта закрывают компонентные тесты потребителя, чьи сценарии и заглушки выведены из спеки поставщика (доработка скилла `component-tests` в [service-template](https://github.com/ubik-life/service-template/)).
 
+## Стек
+
+| Компонент | Технология |
+|---|---|
+| CLI | Go + [cobra](https://github.com/spf13/cobra) |
+| Парсинг и резолв OpenAPI 3.x | [kin-openapi](https://github.com/getkin/kin-openapi) (honest reuse) |
+| Конфигурация пары | YAML (`contract-tests.yaml`) |
+| Отчёт | JSON в каноне экосистемы |
+
 ## Конфигурация
 
 `contract-tests.yaml` — симметричен `pinout-asyncapi`:
@@ -35,6 +44,26 @@ contract_tests:
     timeout: 30
 ```
 
+## Как работает (поток валидации)
+
+Линейная труба; рядом с каждым шагом — где он может сбоить:
+
+```
+validate <contract-tests.yaml>
+| Читаем и валидируем конфиг (стороны, операции, настройки)        → CONFIG_NOT_FOUND · CONFIG_INVALID
+| Загружаем спеку потребителя (file/URL), парсим, резолвим $ref     → SPEC_NOT_FOUND · SPEC_UNREACHABLE · SPEC_PARSE_ERROR
+| Загружаем master-спеку поставщика (= прод)                        → (те же SPEC_*)
+| Проверяем, что все операции конфига есть у потребителя            → CONSUMER_OPERATION_NOT_FOUND
+| Для каждой операции: ищем у поставщика (path+method) и сверяем
+|   request / response (provider ⊇ consumer) / коды / content-type / схемы
+|                                                                   → OPERATION_NOT_FOUND · REQUEST_INCOMPATIBLE
+|                                                                     RESPONSE_INCOMPATIBLE · STATUS_MISMATCH · CONTENT_TYPE_MISMATCH
+| Пишем канонический JSON-отчёт (stdout + файл, generated_at от часов)
+| Возвращаем exit code
+```
+
+Несовместимость — это **не** ошибка выполнения: отчёт формируется (`compatible=false`), exit 1. Ошибки конфига/спеки коротят трубу до сравнения (exit 2/3). Дерево модулей и блок-схема трубы — [`docs/design/contract-validate/c4.md`](./docs/design/contract-validate/c4.md).
+
 ## Запуск (целевой CLI, симметрично async)
 
 ```bash
@@ -43,6 +72,17 @@ go run ./cmd validate ./contract-tests.yaml
 # Потребитель: GET /balance
 # Exit codes: 0 совместимо · 1 несовместимо · 2 ошибка конфигурации · 3 ошибка парсинга/загрузки спек
 ```
+
+## Сбои и коды выхода
+
+| Exit | Значение | Коды ошибок |
+|---|---|---|
+| `0` | совместимо | — |
+| `1` | несовместимо | `OPERATION_NOT_FOUND`, `REQUEST_INCOMPATIBLE`, `RESPONSE_INCOMPATIBLE`, `STATUS_MISMATCH`, `CONTENT_TYPE_MISMATCH` |
+| `2` | ошибка конфигурации | `CONFIG_NOT_FOUND`, `CONFIG_INVALID`, `CONSUMER_OPERATION_NOT_FOUND` |
+| `3` | ошибка загрузки/парсинга спеки | `SPEC_NOT_FOUND`, `SPEC_UNREACHABLE`, `SPEC_PARSE_ERROR` |
+
+Каждая ошибка — `ValidationError` (код + сообщение + локация + контекст), и в человекочитаемом выводе, и в JSON-отчёте. Чем какой риск закрывается — [`docs/risk-coverage.md`](./docs/risk-coverage.md).
 
 ## Формат отчёта
 
