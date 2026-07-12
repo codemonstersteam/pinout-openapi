@@ -1,13 +1,13 @@
-# Go
+# harness (локальная установка — симлинки в бандл, не коммитим)
+/.claude/
+/CLAUDE.md
+/AGENTS.md
+/harness/
+# трасса прогона
+/.agent/
+# Go build
 /bin/
 *.exe
 *.test
-*.out
-
-# Отчёты валидации
-compatibility_report.json
-
-# IDE/OS
-.idea/
-.vscode/
+vendor/
 .DS_Store
