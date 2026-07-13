@@ -13,7 +13,6 @@ RUN go build -ldflags '-s -w' -o /out/tool ./cmd/app
 
 FROM alpine:3.21
 COPY --from=build /out/tool /tool
-COPY config.yaml /config.yaml
 # One-shot стейджер (эфемерный, не SUT-рантайм): под root, т.к. named-том /out
-# создаётся root-owned на первом монтировании. Копирует бинарь+конфиг в том и выходит.
-ENTRYPOINT ["/bin/sh", "-c", "cp /tool /out/tool && cp /config.yaml /out/config.yaml && echo 'staged tool into shared volume /out'"]
+# создаётся root-owned на первом монтировании. Копирует бинарь в том и выходит.
+ENTRYPOINT ["/bin/sh", "-c", "cp /tool /out/tool && echo 'staged tool into shared volume /out'"]
