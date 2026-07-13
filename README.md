@@ -1,15 +1,25 @@
 # pinout-openapi
 
-`pinout-openapi` is a Go CLI that contract-checks a consumer's expected operations against a
-provider's master (= prod) OpenAPI spec. It is a **pure comparison** tool: given a consumer OpenAPI
-document and the set of operations (`path` + `method`) the consumer expects to use, it checks each
-one against the provider's OpenAPI spec and reports a `compatible` / `incompatible` verdict plus a
-structured JSON report of every mismatch. It does **not** stand up stubs, run tests, generate an SDK,
-or check that a service conforms to its own spec — it only compares two already-existing specs so a
-CI pipeline can gate a merge on the result deterministically.
+> Part of platform [pinout](https://github.com/codemonstersteam/pinout). Architecture and concept
+> live there. Symmetric to `pinout-asyncapi` in config shape and report format.
 
-Part of the [pinout](https://github.com/codemonstersteam/pinout) family; symmetric to `pinout-asyncapi` in config shape and
-report format.
+`pinout-openapi` is a Go CLI that contract-checks a consumer's expected operations against a
+provider's master (= prod) OpenAPI spec.
+
+## Can / Cannot
+
+**Can:**
+
+- Compare two existing OpenAPI specs (consumer expectations vs. provider).
+- Report a `compatible` / `incompatible` verdict plus structured findings.
+- Gate a CI merge deterministically on the result.
+
+**Cannot:**
+
+- Does not stand up stubs.
+- Does not run tests.
+- Does not generate an SDK.
+- Does not check a service conforms to its own spec.
 
 ## Usage
 
@@ -95,3 +105,18 @@ One row per outcome, matching
 
 **Streams:** stdout carries only the machine report (one JSON body, always emitted); stderr carries
 logs/diagnostics, including the `error.code` diagnostic line on any non-zero exit.
+
+**Error/finding shape:** each finding is `{rule, location, detail}` (see
+[`api-specification/report.schema.json`](api-specification/report.schema.json)). Anything
+incompatible or unchecked is always visible in the report and signaled by a non-zero exit — never
+masked as success.
+
+## See also
+
+- [`component-tests/`](component-tests/) — how it behaves from outside (black-box scenarios).
+- [`docs/design/slice-compat-check/use-case.md`](docs/design/slice-compat-check/use-case.md) — the
+  Cockburn use case behind this behavior.
+- [`docs/design/slice-compat-check/c4.md`](docs/design/slice-compat-check/c4.md) — C4 component view
+  (C3).
+- [`docs/design/slice-compat-check/module-tree.md`](docs/design/slice-compat-check/module-tree.md) —
+  the module tree.
