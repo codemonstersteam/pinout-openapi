@@ -1,13 +1,29 @@
+# Собранные бинарники
+/tool
+/dist/
+bin/
+
+# Отчёты в stdout иногда редиректят в файл — не коммитим
+*_report.json
+*.report.json
+
 # Go
-/bin/
-*.exe
 *.test
 *.out
+coverage.txt
 
-# Отчёты валидации
-compatibility_report.json
-
-# IDE/OS
-.idea/
+# IDE
 .vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
 .DS_Store
+Thumbs.db
+
+# Харнес rationaldev — локальные артефакты, в продуктовый репозиторий не коммитим
+/.claude/
+/CLAUDE.md
+/harness/
+/.agent/

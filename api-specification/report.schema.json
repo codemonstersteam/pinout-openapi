@@ -1,0 +1,119 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/codemonstersteam/pinout-openapi/api-specification/report.schema.json",
+  "title": "pinout-openapi compatibility report — output canon",
+  "description": "Frozen output contract (the CLI's postcondition, Design by Contract) of the pinout-openapi compatibility-check CLI. This document IS the machine-readable JSON report emitted to stdout (always) and written to settings.json_report_file (when save_json_report=true). It is the CANONICAL, symmetric report schema: pinout-asyncapi aligns to it later. Derived 1:1 from BRD 'Data dictionary — output (JSON report) — committed canon'. Determinism: identical inputs → byte-identical report body modulo the optional generated_at timestamp.",
+  "x-frozen": "2026-07-12",
+  "x-profile": "cli",
+  "x-canon": "symmetric — pinout-asyncapi aligns to this shape",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["verdict", "consumer", "provider", "operations"],
+  "properties": {
+    "verdict": {
+      "type": "string",
+      "enum": ["compatible", "incompatible"],
+      "description": "Overall result. 'incompatible' iff any operation is incompatible; else 'compatible'. Maps to exit 0 (compatible) / exit 1 (incompatible)."
+    },
+    "consumer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Consumer identity, echoed from config consumer.name."
+        }
+      }
+    },
+    "provider": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "source"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Provider identity, echoed from config provider.name."
+        },
+        "source": {
+          "type": "string",
+          "description": "Resolved provider origin — the spec_url value or the spec_path value actually used."
+        }
+      }
+    },
+    "operations": {
+      "type": "array",
+      "description": "Per-operation compatibility result, one entry per configured consumer operation.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "method", "status", "findings"],
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Operation path (echoed from config)."
+          },
+          "method": {
+            "type": "string",
+            "enum": ["get", "put", "post", "delete", "options", "head", "patch", "trace"],
+            "description": "Normalized lower-case verb."
+          },
+          "status": {
+            "type": "string",
+            "enum": ["compatible", "incompatible"],
+            "description": "Per-operation verdict. 'incompatible' iff findings is non-empty."
+          },
+          "findings": {
+            "type": "array",
+            "description": "Each mismatch that makes this operation incompatible. Empty when status is 'compatible'.",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["rule", "location", "detail"],
+              "properties": {
+                "rule": {
+                  "type": "string",
+                  "enum": [
+                    "presence",
+                    "request_contravariance",
+                    "response_covariance",
+                    "status_codes",
+                    "content_types"
+                  ],
+                  "description": "Which of the 5 committed compatibility rules was violated. presence: operation absent from provider. request_contravariance: provider requires a request item the consumer does not send. response_covariance: consumer reads a response field the provider does not provide. status_codes: consumer expects a status the provider does not declare. content_types: content-type mismatch for the operation."
+                },
+                "location": {
+                  "type": "string",
+                  "description": "Where the mismatch is (e.g. the parameter/property/status/content-type pointer within the operation)."
+                },
+                "detail": {
+                  "type": "string",
+                  "description": "Human-readable explanation of the specific mismatch."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Optional report generation timestamp (RFC 3339). Excluded from the determinism diff — 'byte-identical modulo timestamps'."
+    }
+  },
+  "allOf": [
+    {
+      "$comment": "Consistency invariant: an incompatible operation carries ≥1 finding; a compatible one carries none.",
+      "properties": {
+        "operations": {
+          "items": {
+            "if": { "properties": { "status": { "const": "compatible" } } },
+            "then": { "properties": { "findings": { "maxItems": 0 } } },
+            "else": { "properties": { "findings": { "minItems": 1 } } }
+          }
+        }
+      }
+    }
+  ]
+}

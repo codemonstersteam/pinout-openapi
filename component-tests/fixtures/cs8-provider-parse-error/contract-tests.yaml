@@ -1,0 +1,12 @@
+# CS8 fixture: provider-stub answers /malformed with 200 + a non-OpenAPI body ->
+# ProviderSpecReader.Load's kin-openapi step fails to parse -> PROVIDER_PARSE_ERROR
+# (exit 3).
+consumer:
+  spec_path: "/fixtures/cs8-provider-parse-error/consumer.yaml"
+  name: consumer-fixture
+  operations:
+    - path: /pets
+      method: get
+provider:
+  spec_url: "http://provider-stub:8080/malformed"
+  name: provider-fixture

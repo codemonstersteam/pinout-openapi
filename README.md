@@ -1,103 +1,122 @@
 # pinout-openapi
 
-Концепт экосистемы: [pinout](https://github.com/codemonstersteam/pinout) ([локально](../pinout/README.md)).
+> Part of platform [pinout](https://github.com/codemonstersteam/pinout). Architecture and concept
+> live there. Symmetric to `pinout-asyncapi` in config shape and report format.
 
-Валидатор синхронных контрактов между REST-сервисами. **Чистая функция**: сравнивает OpenAPI-спецификацию потребителя с master-OpenAPI поставщика (master = прод) и выдаёт вердикт совместимости на pre-merge стадии в CI. Симметричен [`pinout-asyncapi`](https://github.com/codemonstersteam/pinout-asyncapi) по конфигурации и формату отчёта.
+`pinout-openapi` is a Go CLI that contract-checks a consumer's expected operations against a
+provider's master (= prod) OpenAPI spec.
 
-## Границы
+## Can / Cannot
 
-- **Делает:** по `contract-tests.yaml` сверяет операции, на которые опирается потребитель, с контрактом поставщика — наличие операции (path+method), совместимость схем request/response, коды ответов, content-type.
-- **Не делает:** не поднимает заглушки и не гоняет тесты (это слой методологии в репозитории потребителя); не генерирует клиентский SDK; не проверяет, что сам сервис конформен своей спеке (это компонентные тесты сервиса).
+**Can:**
 
-## Источник истины и обоснование
+- Compare two existing OpenAPI specs (consumer expectations vs. provider).
+- Report a `compatible` / `incompatible` verdict plus structured findings.
+- Gate a CI merge deterministically on the result.
 
-Спека поставщика в Git — источник истины. Подход и его обоснование (несущий инвариант «сервис конформен своей спеке ⇒ совместимость спек = реальная совместимость», границы, сравнение с генерацией либ) описаны в [концепте pinout](../pinout/README.md). Семантику использования контракта закрывают компонентные тесты потребителя, чьи сценарии и заглушки выведены из спеки поставщика (доработка скилла `component-tests` в [service-template](https://github.com/ubik-life/service-template/)).
+**Cannot:**
 
-## Стек
+- Does not stand up stubs.
+- Does not run tests.
+- Does not generate an SDK.
+- Does not check a service conforms to its own spec.
 
-| Компонент | Технология |
-|---|---|
-| CLI | Go + [cobra](https://github.com/spf13/cobra) |
-| Парсинг и резолв OpenAPI 3.x | [kin-openapi](https://github.com/getkin/kin-openapi) (honest reuse) |
-| Конфигурация пары | YAML (`contract-tests.yaml`) |
-| Отчёт | JSON в каноне экосистемы |
+## Usage
 
-## Конфигурация
+```sh
+pinout-openapi run <contract-tests.yaml>
+```
 
-`contract-tests.yaml` — симметричен `pinout-asyncapi`:
+The single positional argument is the path to a config file, shape-validated against
+[`api-specification/config.schema.json`](api-specification/config.schema.json):
+
+- **`consumer`** — the expectations side:
+  - `spec_path` — filesystem path to the consumer's local OpenAPI 3.x document.
+  - `name` — free-form consumer label (non-empty).
+  - `operations[]` — operations the consumer expects to be compatible; each item is
+    `{path, method}` (`path` starts with `/`; `method` is one of `get|put|post|delete|options|
+    head|patch|trace`, case-insensitive on input, normalized to lower-case). At least one item
+    required.
+- **`provider`** — the source-of-truth side:
+  - exactly one of `spec_url` (HTTP(S) URL, unauthenticated fetch) **or** `spec_path` (local file)
+    — mutually exclusive, exactly one required.
+  - `name` — free-form provider label (non-empty).
+- **`settings`** — optional, every field has a default:
+  - `log_level` — one of `debug|info|warn|error`, default `info`.
+  - `save_json_report` — boolean, default `true`; when `true`, the report is also written to
+    `json_report_file`.
+  - `json_report_file` — writable path for the JSON report, default `compatibility_report.json`;
+    required when `save_json_report` is `true`.
+  - `timeout` — provider fetch timeout in seconds, integer in `[1, 600]`, default `30`.
+
+Example `contract-tests.yaml`:
 
 ```yaml
-contract_tests:
-  consumer:
-    spec_path: "../api-specification/openapi.yml"   # спека потребителя (локально)
-    name: "mq-rest-sync-adapter"
-    operations:                                       # операции, которые потребитель использует
-      - { path: "/balance", method: "GET" }
-  provider:
-    spec_url: "https://git.codemonsters.team/guides/wallet-balance/-/raw/main/api-specification/openapi.yml"  # master = прод
-    # spec_path: "./testdata/provider_openapi.yml"   # альтернатива для офлайн-тестов, как в async
-    name: "wallet-balance-service"
-  settings:
-    log_level: "info"
-    save_json_report: true
-    json_report_file: "compatibility_report.json"
-    timeout: 30
+consumer:
+  spec_path: "./openapi/consumer.yaml"
+  name: "mq-rest-sync-adapter"
+  operations:
+    - path: "/balance"
+      method: GET
+provider:
+  spec_url: "https://git.example.com/wallet-balance-service/openapi.yml"
+  name: "wallet-balance-service"
+settings:
+  log_level: info
+  save_json_report: true
+  json_report_file: "compatibility_report.json"
+  timeout: 30
 ```
 
-## Как работает (поток валидации)
+**Output** — a JSON report shaped by
+[`api-specification/report.schema.json`](api-specification/report.schema.json):
+`verdict` (`compatible|incompatible`), `consumer.name`, `provider.{name,source}`, and
+`operations[]` — one entry per configured operation, each carrying `{path, method, status,
+findings[]}` (`findings[]` is empty when `status` is `compatible`, and each finding is
+`{rule, location, detail}`). The report is always written to stdout as one machine-readable JSON
+line; it is additionally written to `settings.json_report_file` when `save_json_report=true`.
 
-Линейная труба; рядом с каждым шагом — где он может сбоить:
+## Build & run
 
-```
-validate <contract-tests.yaml>
-| Читаем и валидируем конфиг (стороны, операции, настройки)        → CONFIG_NOT_FOUND · CONFIG_INVALID
-| Загружаем спеку потребителя (file/URL), парсим, резолвим $ref     → SPEC_NOT_FOUND · SPEC_UNREACHABLE · SPEC_PARSE_ERROR
-| Загружаем master-спеку поставщика (= прод)                        → (те же SPEC_*)
-| Проверяем, что все операции конфига есть у потребителя            → CONSUMER_OPERATION_NOT_FOUND
-| Для каждой операции: ищем у поставщика (path+method) и сверяем
-|   request / response (provider ⊇ consumer) / коды / content-type / схемы
-|                                                                   → OPERATION_NOT_FOUND · REQUEST_INCOMPATIBLE
-|                                                                     RESPONSE_INCOMPATIBLE · STATUS_MISMATCH · CONTENT_TYPE_MISMATCH
-| Пишем канонический JSON-отчёт (stdout + файл, generated_at от часов)
-| Возвращаем exit code
+```sh
+go build ./... && go test ./...            # build the binary + run unit tests
+go run ./cmd/app run <config>              # run the compatibility check against a config
+./component-tests/scripts/run-tests.sh     # component tests (Docker) — not `go test` from the host
 ```
 
-Несовместимость — это **не** ошибка выполнения: отчёт формируется (`compatible=false`), exit 1. Ошибки конфига/спеки коротят трубу до сравнения (exit 2/3). Дерево модулей и блок-схема трубы — [`docs/design/contract-validate/c4.md`](./docs/design/contract-validate/c4.md).
+## Карта режимов отказа
 
-## Запуск (целевой CLI, симметрично async)
+One row per outcome, matching
+[`api-specification/exit-codes.md`](api-specification/exit-codes.md) 1:1 — row 0 (success) plus the
+9 committed `error.code` values (9 use-case Extensions == 9 distinguishable failures):
 
-```bash
-go run ./cmd validate ./contract-tests.yaml
-# ✅ Контракты совместимы
-# Потребитель: GET /balance
-# Exit codes: 0 совместимо · 1 несовместимо · 2 ошибка конфигурации · 3 ошибка парсинга/загрузки спек
-```
+| # | Condition | `error.code` | exit | verdict | operator action |
+|---|---|---|---|---|---|
+| 0 | all configured operations compatible | — | `0` | compatible | none |
+| 1 | ≥1 operation fails a compatibility rule | `INCOMPATIBLE` | `1` | incompatible | fix consumer/provider before merge (see `findings[]`) |
+| 2 | config missing/invalid YAML/missing field/bad enum/`spec_url`+`spec_path` both-or-neither/empty `operations` | `CONFIG_INVALID` | `2` | error | fix `contract-tests.yaml` |
+| 3 | consumer spec missing/unreadable | `SPEC_UNREADABLE` | `2` | error | fix consumer `spec_path` |
+| 4 | consumer spec unparseable / not OpenAPI 3.x | `SPEC_PARSE_ERROR` | `2` | error | fix consumer spec |
+| 5 | configured op absent from consumer spec | `OP_NOT_IN_CONSUMER` | `2` | error | fix config or consumer spec |
+| 6 | provider spec unreachable / HTTP non-2xx | `PROVIDER_UNREACHABLE` | `3` | error | check `spec_url` / network |
+| 7 | provider fetch exceeds `settings.timeout` | `PROVIDER_TIMEOUT` | `3` | error | check network / raise `timeout` |
+| 8 | provider spec unparseable / not OpenAPI 3.x | `PROVIDER_PARSE_ERROR` | `3` | error | fix provider spec |
+| 9 | JSON report file cannot be written | `REPORT_WRITE_ERROR` | `3` | error | check path / permissions / disk |
 
-## Сбои и коды выхода
+**Streams:** stdout carries only the machine report (one JSON body, always emitted); stderr carries
+logs/diagnostics, including the `error.code` diagnostic line on any non-zero exit.
 
-| Exit | Значение | Коды ошибок |
-|---|---|---|
-| `0` | совместимо | — |
-| `1` | несовместимо | `OPERATION_NOT_FOUND`, `REQUEST_INCOMPATIBLE`, `RESPONSE_INCOMPATIBLE`, `STATUS_MISMATCH`, `CONTENT_TYPE_MISMATCH` |
-| `2` | ошибка конфигурации | `CONFIG_NOT_FOUND`, `CONFIG_INVALID`, `CONSUMER_OPERATION_NOT_FOUND` |
-| `3` | ошибка загрузки/парсинга спеки | `SPEC_NOT_FOUND`, `SPEC_UNREACHABLE`, `SPEC_PARSE_ERROR` |
+**Error/finding shape:** each finding is `{rule, location, detail}` (see
+[`api-specification/report.schema.json`](api-specification/report.schema.json)). Anything
+incompatible or unchecked is always visible in the report and signaled by a non-zero exit — never
+masked as success.
 
-Каждая ошибка — `ValidationError` (код + сообщение + локация + контекст), и в человекочитаемом выводе, и в JSON-отчёте. Чем какой риск закрывается — [`docs/risk-coverage.md`](./docs/risk-coverage.md).
+## See also
 
-## Формат отчёта
-
-JSON-отчёт — в общем формате экосистемы, определённом здесь: [`docs/report-format.md`](./docs/report-format.md). Его потребляет `pinout-netlist`; `pinout-asyncapi` подстраивается под него (эпик E0).
-
-## Методология и проектирование
-
-Репозиторий разрабатывается по скиллам [service-template](https://github.com/ubik-life/service-template/) — см. [`CLAUDE.md`](./CLAUDE.md). Пакет проектирования MVP — [`docs/design/contract-validate/`](./docs/design/contract-validate/). Статус и тикеты — [`docs/design/contract-validate/backlog.md`](./docs/design/contract-validate/backlog.md). Покрытие рисков сборки/валидации инструментами и проверками — [`docs/risk-coverage.md`](./docs/risk-coverage.md).
-
-Концептуальный дизайн (**C4**: контейнер/компонент = дерево модулей) и системный **use case по Коберну** — [`docs/design/contract-validate/c4.md`](./docs/design/contract-validate/c4.md). Карта всей экосистемы (C4 контекст) — в [концепте pinout](../pinout/README.md).
-
-## Статус
-
-📋 Проектирование (MVP — эпик E1 в [бэклоге экосистемы](../pinout/backlog.md)). Код ещё не реализован: сначала пакет проектирования и handoff-аппрув оператора по скиллу `program-design`.
-
-## Лицензия
-
-Открытая лицензия (см. `LICENSE`).
+- [`component-tests/`](component-tests/) — how it behaves from outside (black-box scenarios).
+- [`docs/design/slice-compat-check/use-case.md`](docs/design/slice-compat-check/use-case.md) — the
+  Cockburn use case behind this behavior.
+- [`docs/design/slice-compat-check/c4.md`](docs/design/slice-compat-check/c4.md) — C4 component view
+  (C3).
+- [`docs/design/slice-compat-check/module-tree.md`](docs/design/slice-compat-check/module-tree.md) —
+  the module tree.
