@@ -8,7 +8,7 @@ structured JSON report of every mismatch. It does **not** stand up stubs, run te
 or check that a service conforms to its own spec — it only compares two already-existing specs so a
 CI pipeline can gate a merge on the result deterministically.
 
-Part of the [pinout](../pinout/README.md) family; symmetric to `pinout-asyncapi` in config shape and
+Part of the [pinout](https://github.com/codemonstersteam/pinout) family; symmetric to `pinout-asyncapi` in config shape and
 report format.
 
 ## Usage
