@@ -1,0 +1,17 @@
+# CS9 fixture: consumer and provider both load and are compatible (compare stage
+# never the point of this scenario); json_report_file names a path under a
+# directory that does not exist and cannot be created -> ReportWriter.Write fails
+# -> REPORT_WRITE_ERROR (exit 3). provider.yaml is read from the local filesystem
+# (not the stub) so the "provider master spec not mutated" Then can hash it.
+consumer:
+  spec_path: "/fixtures/cs9-report-write-error/consumer.yaml"
+  name: consumer-fixture
+  operations:
+    - path: /pets
+      method: get
+provider:
+  spec_path: "/fixtures/cs9-report-write-error/provider.yaml"
+  name: provider-fixture
+settings:
+  save_json_report: true
+  json_report_file: "/no-such-dir/report.json"

@@ -1,0 +1,36 @@
+# Компонентные тесты template-go-cli. Запуск: ./scripts/run-tests.sh
+# Модель CLI (не сервис): tool = one-shot сборка+стейджинг бинаря в общий том,
+# tester = godog в контейнере, экзекутит бинарь из тома и проверяет exit/stdout.
+name: component-tests
+services:
+  tool:
+    build:
+      context: ..
+      dockerfile: component-tests/compose/tool.Dockerfile
+    volumes:
+      - bin:/out
+  # provider-stub — real-protocol HTTP double for compat-check's provider-side
+  # component scenarios (CS6/CS7/CS8; ticket-02). Fixtures reach it by service
+  # name: http://provider-stub:8080/{unreachable,timeout,malformed}.
+  provider-stub:
+    build:
+      context: ..
+      dockerfile: component-tests/compose/provider-stub.Dockerfile
+  tester:
+    build:
+      context: ..
+      dockerfile: component-tests/Dockerfile.runtime
+    environment:
+      TOOL_BIN: /bin-share/tool
+    volumes:
+      - bin:/bin-share
+      # Component-scenario fixtures (contract-tests.yaml + consumer/provider spec
+      # pairs), read-only — see component-tests/fixtures/cs*-*/.
+      - ./fixtures:/fixtures:ro
+    depends_on:
+      tool:
+        condition: service_completed_successfully
+      provider-stub:
+        condition: service_started
+volumes:
+  bin:

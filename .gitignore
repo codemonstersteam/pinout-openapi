@@ -1,13 +1,29 @@
-# harness (локальная установка — симлинки в бандл, не коммитим)
+# Собранные бинарники
+/tool
+/dist/
+bin/
+
+# Отчёты в stdout иногда редиректят в файл — не коммитим
+*_report.json
+*.report.json
+
+# Go
+*.test
+*.out
+coverage.txt
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Харнес rationaldev — локальные артефакты, в продуктовый репозиторий не коммитим
 /.claude/
 /CLAUDE.md
-/AGENTS.md
 /harness/
-# трасса прогона
 /.agent/
-# Go build
-/bin/
-*.exe
-*.test
-vendor/
-.DS_Store

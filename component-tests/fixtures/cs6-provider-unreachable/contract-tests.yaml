@@ -1,0 +1,14 @@
+# CS6 fixture: provider fetched over real HTTP from the provider-stub compose
+# service, which answers /unreachable with a non-2xx (500) status ->
+# ProviderSpecReader.Load fails -> PROVIDER_UNREACHABLE (exit 3).
+consumer:
+  spec_path: "/fixtures/cs6-provider-unreachable/consumer.yaml"
+  name: consumer-fixture
+  operations:
+    - path: /pets
+      method: get
+provider:
+  spec_url: "http://provider-stub:8080/unreachable"
+  name: provider-fixture
+settings:
+  timeout: 5

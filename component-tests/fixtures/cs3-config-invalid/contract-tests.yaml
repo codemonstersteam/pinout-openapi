@@ -1,0 +1,6 @@
+# CS3 fixture: deliberately invalid YAML (unterminated quoted scalar) so
+# ConfigReader.Read succeeds (bytes are readable) but NewConfig's YAML unmarshal
+# fails -> CONFIG_INVALID (exit 2). Do not "fix" this file's syntax.
+consumer:
+  spec_path: "/fixtures/cs3-config-invalid/consumer.yaml
+  name: broken

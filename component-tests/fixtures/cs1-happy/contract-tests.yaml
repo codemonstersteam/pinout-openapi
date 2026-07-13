@@ -1,0 +1,15 @@
+# CS1 fixture (happy path): consumer and provider both load, /pets get matches on
+# both sides with an identical response shape -> verdict=compatible, no findings.
+# save_json_report=true so the ReportWriter branch (CS1's 3rd/4th Then) is exercised.
+consumer:
+  spec_path: "/fixtures/cs1-happy/consumer.yaml"
+  name: consumer-fixture
+  operations:
+    - path: /pets
+      method: get
+provider:
+  spec_path: "/fixtures/cs1-happy/provider.yaml"
+  name: provider-fixture
+settings:
+  save_json_report: true
+  json_report_file: "/tmp/reports/cs1-report.json"

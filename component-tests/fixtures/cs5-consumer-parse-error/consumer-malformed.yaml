@@ -1,0 +1,4 @@
+# Valid YAML, but not an OpenAPI 3.x document at all (no openapi/info/paths) ->
+# kin-openapi load fails -> SPEC_PARSE_ERROR (exit 2).
+this: is
+not: an openapi document
