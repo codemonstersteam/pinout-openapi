@@ -1,0 +1,20 @@
+# Стаб поставщика в компонентных тестах потребителя wallet-ui. Contract-true: сгенерён из спеки
+# поставщика (E-harness). Конкретные ПРИМЕРЫ: что потребитель ШЛЁТ (request) и что ЧИТАЕТ (response).
+# Заметь: потребитель НЕ читает `fee` из ответа /transfers — значит от контракта он его не ждёт.
+provenance:
+  provider: balance-service
+  provider_version: 1.0.0
+  captured_hash: "sha256:demo"
+interactions:
+  - operation: { path: /transfers, method: post }
+    request:
+      body: { from: acc-1, to: acc-2, amount: 500 }
+    response:
+      status: 200
+      body: { transferId: tr-777, status: done }
+  - operation: { path: "/accounts/{id}/balance", method: get }
+    request:
+      pathParams: { id: acc-1 }
+    response:
+      status: 200
+      body: { balance: 1200, currency: USD }

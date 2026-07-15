@@ -1,0 +1,9 @@
+{
+  "name": "pinout-openapi-sandbox",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Песочница-доказательство алгоритма сверки consumed-contract ↳ спека поставщика",
+  "scripts": { "start": "node check.mjs" },
+  "dependencies": { "js-yaml": "^4.1.0" }
+}

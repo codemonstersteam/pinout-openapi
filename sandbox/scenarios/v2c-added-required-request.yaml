@@ -1,0 +1,50 @@
+openapi: 3.0.3
+info:
+  title: "balance-service (provider) — v2c: +required request field"
+  version: 2.0.0
+# МУТАЦИЯ: /transfers теперь ТРЕБУЕТ поле idempotencyKey. Потребитель его не шлёт → НЕСОВМЕСТИМО.
+paths:
+  /transfers:
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [from, to, amount, idempotencyKey]
+              properties:
+                from:           { type: string }
+                to:             { type: string }
+                amount:         { type: integer }
+                idempotencyKey: { type: string }
+      responses:
+        "200":
+          description: created
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [transferId, status]
+                properties:
+                  transferId: { type: string }
+                  status:     { type: string }
+                  fee:        { type: integer }
+  /accounts/{id}/balance:
+    get:
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [balance, currency]
+                properties:
+                  balance:  { type: integer }
+                  currency: { type: string }
