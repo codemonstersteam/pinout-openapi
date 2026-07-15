@@ -1,7 +1,0 @@
-# Present but unused: the config's consumer.spec_path deliberately points at a
-# nonexistent sibling file instead of this one, to trigger SPEC_UNREADABLE.
-openapi: 3.0.3
-info:
-  title: unused
-  version: "1.0.0"
-paths: {}
