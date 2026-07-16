@@ -1,0 +1,48 @@
+openapi: 3.0.3
+info:
+  title: "balance-service (provider) — v2b: -response field"
+  version: 2.0.0
+# МУТАЦИЯ: из ответа /balance УБРАНО поле currency. Потребитель его читает → должно быть НЕСОВМЕСТИМО.
+paths:
+  /transfers:
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [from, to, amount]
+              properties:
+                from:   { type: string }
+                to:     { type: string }
+                amount: { type: integer }
+      responses:
+        "200":
+          description: created
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [transferId, status]
+                properties:
+                  transferId: { type: string }
+                  status:     { type: string }
+                  fee:        { type: integer }
+  /accounts/{id}/balance:
+    get:
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [balance]
+                properties:
+                  balance: { type: integer }

@@ -1,0 +1,8 @@
+consumer: wallet-ui
+provider:
+  name: balance-service
+  spec_path: ../provider/openapi.v1.yaml
+# Операции поставщика, которые потребитель реально зовёт = объём сверки. Сверяем ТОЛЬКО их.
+operations:
+  - { path: /transfers, method: post }
+  - { path: "/accounts/{id}/balance", method: get }
