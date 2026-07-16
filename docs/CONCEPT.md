@@ -19,7 +19,7 @@ C4Context
   Person(dev, "Разработчик / CI", "pre-merge валидация")
 
   System_Boundary(pinout, "pinout") {
-    System(oa, "pinout-openapi", "FORWARD: стаб-инстансы потребителя ↳ схема поставщика (openapi3filter)")
+    System(oa, "pinout-openapi", "FORWARD: consumed-contract из стабов потребителя ↳ схема поставщика (reads⊆provides)")
     System(nl, "pinout-netlist", "REVERSE: диф спеки поставщика v_old→v_new (oasdiff) + граф зависимостей")
   }
 
@@ -46,8 +46,8 @@ C4Container
   Container_Boundary(t, "pinout-openapi CLI") {
     Container(cli, "cli/ (дверь)", "cobra", "run <config> → exit 0/1/2/3 + JSON")
     Container(pl, "provider loader", "kin-openapi", "parse + $ref + validate → openapi3.T")
-    Container(sl, "stub loader", "Go", "заглушки → []Instance{req,resp} по op")
-    Container(core, "validator (ЯДРО)", "openapi3filter", "instance ↳ schema: req принимается? resp валиден? (рекурсивно, JSON Schema)")
+    Container(sl, "contract loader", "Go", "стабы → consumed-contract {sends,reads} по op (reconstruct)")
+    Container(core, "validator (ЯДРО)", "kin-openapi", "reads⊆provides / requires⊆sends + типы (schema-vs-schema, рекурсивный субтайпинг)")
     Container(rep, "report writer", "Go", "Finding[] → verdict + канон-отчёт")
   }
 
@@ -56,7 +56,7 @@ C4Container
   Rel(cli, sl, "load(config.ops → stubs)")
   Rel(pl, prov, "GET/read")
   Rel(sl, stub, "read")
-  Rel(cli, core, "validate(instances, providerSchema)")
+  Rel(cli, core, "validate(consumedContract, providerSchema)")
   Rel(core, rep, "findings")
 ```
 
@@ -70,17 +70,20 @@ C4Container
 checkConsumerToProvider(config) -> Result<Report, Error>:
   | loadProviderSpec(config.provider)                 -> ProviderSpec   # kin-openapi parse+$ref+validate; fail → PROVIDER_*/SPEC_*
   | resolveOps(config.operations, ProviderSpec)       -> []Op           # каждая config-op ЕСТЬ у поставщика; нет → OP_NOT_IN_PROVIDER
-  | loadStubs(config.consumer.stubs, Ops)             -> []Stub         # инстансы {op, request, expectedResponse}; нет заглушки → STUB_MISSING
-  | flatMap(Stubs, validateAgainstSchema)             -> []Finding      # ЯДРО, per stub:
-  |     validateRequest(stub.request , op.requestSchema)          -> []Finding  #  поставщик ПРИНИМАЕТ запрос? (контравариантно)
-  |     validateResponse(stub.expectedResponse, op.responseSchema)-> []Finding  #  ожидаемый ответ ВАЛИДЕН по схеме? (ковариантно)
-  |         # openapi3filter рекурсивен → вложенность/типы/enum/format/nullable — ДАРОМ
+  | reconstruct(config.consumer.stubs, Ops)           -> ConsumedContract # стабы → per op {sends:{поле:тип}, reads:{поле:тип}}; нет стаба → STUB_MISSING
+  | flatMap(ConsumedContract, compareToSchema)        -> []Finding      # ЯДРО, per op — два вложения множеств + типы:
+  |     requires(op) ⊆ sends(consumer)                            -> []Finding  #  поставщик не требует того, чего потребитель не шлёт (контравар.) → MISSING_REQUIRED_REQUEST_FIELD
+  |     reads(consumer) ⊆ provides(op)                            -> []Finding  #  потребитель не читает того, чего поставщик не отдаёт (ковар.) → READS_FIELD_NOT_PROVIDED
+  |     typesMatch(общие поля vs op-schema)                       -> []Finding  #  типы совпадают → TYPE_MISMATCH
+  |         # kin-openapi резолвит схему рекурсивно → вложенность/enum/format/nullable субтайпинг — ДАРОМ
   | aggregate(Findings)                               -> Verdict        # findings≥1 ⇒ incompatible
   | buildReport(Verdict, Findings, meta)              -> Report         # exit 0 compatible | 1 incompatible; stdout + файл
 ```
 
 **Триггер:** PR потребителя. **Смысл:** «моё использование (заглушки) всё ещё ложится на текущую схему
-поставщика?» Глубина сравнения встроена в `openapi3filter` — отдельной «v2 глубокого сравнения» не нужно.
+поставщика?» Ядро — `reads ⊆ provides` + `requires ⊆ sends` + типы, **а НЕ наивная instance-валидация**: на
+открытой схеме (`additionalProperties` по умолчанию) она пропустила бы удаление читаемого поля. Это доказано
+логическим выводом в [`../sandbox/EXPERIMENT.md`](../sandbox/EXPERIMENT.md) (5/5 сценариев). Глубина субтайпинга — даром от `kin-openapi`.
 
 ## Алгоритм REVERSE — поставщик меняет контракт → кто сломается (`pinout-netlist`)
 
@@ -108,16 +111,16 @@ detectBreakingImpact(providerNew) -> Result<ImpactReport, Error>:
 |---|---|---|
 | Триггер | PR **потребителя** | PR **поставщика** |
 | Вопрос | «я совместим с провайдером СЕЙЧАС?» | «кого я сломаю ЭТИМ изменением?» |
-| Вход | provider-схема + config + **заглушки потребителя** | provider **v_old→v_new** + граф |
-| Механизм | `openapi3filter` (instance ↳ schema) | `oasdiff` (spec ↳ spec) + граф |
-| Глубина сравнения | даром от JSON-Schema-валидации kin-openapi | даром от oasdiff |
+| Вход | provider-схема + config + **заглушки потребителя** (→ `consumed-contract`) | provider **v_old→v_new** + граф |
+| Механизм | `reads⊆provides` / `requires⊆sends` + типы (schema-vs-schema, `kin-openapi`) | `oasdiff` (spec ↳ spec) + граф |
+| Глубина сравнения | даром от рекурсивного субтайпинга `kin-openapi` | даром от oasdiff |
 | Роль в экосистеме | связывает **пару сейчас** | связывает **историю во времени** |
 
 Оба стоят на: **provider-спека = истина**; потребитель конформен через свои заглушки/тесты.
 
 ## Открытые вопросы (проработка позже)
 
-1. Формат/расположение заглушек потребителя; извлечение request+expectedResponse из инстанса.
+1. Формат/расположение заглушек потребителя; `reconstruct` инстансов стаба → `consumed-contract` {sends,reads}.
 2. Что валидировать в запросе (path/query/headers/body) и маппинг заглушки на операцию (path+method).
 3. Режимы отказа → exit-коды + `error.code` (compatible/incompatible/OP_NOT_IN_PROVIDER/STUB_MISSING/spec-I/O…).
 4. Поставщик: `spec_url`/`spec_path`/оба; auth к приватному git; таймаут.
