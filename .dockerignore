@@ -1,0 +1,11 @@
+.git
+.gitignore
+.dockerignore
+README.md
+dist/
+bin/
+*.test
+*.out
+.DS_Store
+# component-tests имеют свой билд-контекст; не тащим их артефакты в образ tool
+component-tests/.gitignore

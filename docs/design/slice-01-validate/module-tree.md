@@ -38,6 +38,7 @@ ProcessValidate (head — ROP pipe, no branching)          internal/validate/hea
 ├── ConfigStore.Load     (I/O pipe: read config file)     internal/validate/config/store.go io: none  [CONFIG_ERROR]
 ├── NewConfig            (constructor: validate config)    internal/validate/config/config.go io: none
 ├── ContractStore.Load   (I/O pipe: read+parse contract)  internal/validate/contract/store.go io: none [FILE_NOT_FOUND, PARSE_ERROR]
+├── BuildSpecLoader      (factory: cfg.Settings→SpecLoader) internal/validate/head.go        io: none  -- LATE construction, timeout=cfg.Settings.Timeout (ADR-0005)
 ├── SpecLoader.Load      (I/O: kin-openapi acquire+parse) internal/validate/provider/loader.go io: http [FILE_NOT_FOUND, PARSE_ERROR, HTTP_ERROR, TIMEOUT_ERROR]
 ├── NewComparison        (constructor: unite the trio)     internal/validate/compare/comparison.go io: none
 ├── CompareContracts     (logic: fold R1–R4 over ops)      internal/validate/compare/compare.go io: none
@@ -60,7 +61,8 @@ ProcessValidate(inv Invocation, d Deps) -> Result[Report, Error]:
     | d.ConfigStore.Load(inv.ConfigPath)             -> RawConfig         -- fs read     [ErrConfig     → CONFIG_ERROR / 2]
     | NewConfig(rawConfig)                           -> Config            -- validate    [ErrConfig     → CONFIG_ERROR / 2]
     | d.ContractStore.Load(cfg.ConsumedContractPath) -> ConsumedContract  -- fs+parse    [ErrFileNotFound → FILE_NOT_FOUND / 3, ErrParse → PARSE_ERROR / 3]
-    | d.SpecLoader.Load(cfg.Provider)               -> ProviderSpec      -- kin-openapi [ErrFileNotFound/3, ErrParse/3, ErrHTTP → HTTP_ERROR/3, ErrTimeout → TIMEOUT_ERROR/3]
+    | d.BuildSpecLoader(cfg.Settings)               -> loader            -- LATE construction: timeout = cfg.Settings.Timeout (NO hardcode); pure, total (ADR-0005)
+    | loader.Load(cfg.Provider)                     -> ProviderSpec      -- kin-openapi [ErrFileNotFound/3, ErrParse/3, ErrHTTP → HTTP_ERROR/3, ErrTimeout → TIMEOUT_ERROR/3]
     | NewComparison(cfg, consumed, spec)            -> Comparison        -- unite (scoped ops + sends/reads + provider ops + provenance)
     | CompareContracts(comparison)                  -> ComparisonOutcome -- R1..R4 per op, folded; verdict codes are exit 1
     | FoldReport(outcome)                           -> Report            -- compatible⇔errors==[]; provenance echo; uncovered_operations[]
@@ -95,13 +97,21 @@ short-circuit. (See ADR-0002.)
   `io: none`: the `io:` enum (`none|http|llm|queue|db`) has no `file` value and local reads route to
   no io sub-skill; they remain **isolated I/O pipes** (their failure branches are still component
   scenarios), the tag only means "no metered/network sub-skill applies".
+- **ADR-0005** — `Deps` carries a **`BuildSpecLoader func(Settings) SpecLoader` factory**, not a
+  ready `SpecLoader`. The loader is constructed **inside the head, once per invocation, after
+  `NewConfig`**, bounded by `cfg.Settings.Timeout` — resolving the frozen-design contradiction between
+  *"bounded by settings.timeout"* and *"constructed once as part of a fully-built Deps"* (which forced
+  a hardcoded `defaultProviderTimeoutSeconds=30`, so component scenario 6 could never emit
+  `TIMEOUT_ERROR`). The wired-once, encapsulated object is now the **factory**; the timeout is always
+  the real config value.
 
 ## File layout (slice-aligned — every path under `internal/validate/`)
 
 | Node (module tree) | File |
 |---|---|
 | `ProcessValidate` (head) | `internal/validate/head.go` |
-| `Deps` + wiring | `internal/validate/register.go` |
+| `Deps` port (now carries `BuildSpecLoader func(Settings) SpecLoader`, not a ready `SpecLoader`) + `BuildSpecLoader` factory-call step | `internal/validate/head.go` |
+| `Deps` concrete wiring (supplies `BuildSpecLoader: func(s) { provider.NewSpecLoader(s.Timeout) }`; **no** `defaultProviderTimeoutSeconds`) | `internal/validate/register.go` |
 | slice types (`Invocation`, `Config`, `ConsumedContract`, `ProviderSpec`, `ProviderOperation`, `OperationRef`, `Comparison`, `Violation`, `ComparisonOutcome`, `Report`) | `internal/validate/domain.go` |
 | slice sentinel errors (`ErrConfig`, `ErrFileNotFound`, `ErrParse`, `ErrHTTP`, `ErrTimeout`) + verdict codes | `internal/validate/errors.go` |
 | `cli.Parse` (ingress door) | `internal/validate/cli/parse.go` |

@@ -1,0 +1,14 @@
+{
+  "provenance": {
+    "provider": "balance-service",
+    "provider_version": "1.0.0",
+    "captured_hash": "sha256:0000000000000000000000000000000000000000000000000000000000aa"
+  },
+  "operations": [
+    {
+      "ref": { "path": "/accounts/{id}/balance", "method": "get" },
+      "sends": { "id": "string" },
+      "reads": { "balance": "integer", "currency": "string" }
+    }
+  ]
+}

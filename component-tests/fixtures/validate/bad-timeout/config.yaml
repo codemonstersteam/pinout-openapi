@@ -1,0 +1,14 @@
+# bad-timeout — one element added to the good base that triggers TIMEOUT_ERROR (scenario 6):
+# provider.spec_url points at the real-protocol stub's /stall route, which sleeps 5s before
+# answering; settings.timeout=1 makes the fetch exceed the budget deterministically and fast.
+consumer:
+  name: wallet-ui
+  consumed_contract_path: /fixtures/validate/good/consumed-contract.json
+  operations:
+    - path: /accounts/{id}/balance
+      method: get
+provider:
+  name: balance-service
+  spec_url: http://provider-stub:8080/stall
+settings:
+  timeout: 1

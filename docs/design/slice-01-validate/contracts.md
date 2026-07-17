@@ -39,10 +39,15 @@
 
 - **Signature:** `ProcessValidate(inv: Invocation) -> Result[Report, Error]`
 - **Input (data):** one `Invocation` DTO.
-- **Dependencies (deps):** `Deps{ ConfigStore, ContractStore, SpecLoader, ReportWriter, Clock, *slog.Logger }`
-  (autonomous I/O objects + orthogonal tools — **no** raw `*os.File`/`*http.Client`).
+- **Dependencies (deps):** `Deps{ ConfigStore, ContractStore, BuildSpecLoader, ReportWriter, Clock, *slog.Logger }`
+  (autonomous I/O objects + orthogonal tools — **no** raw `*os.File`/`*http.Client`). Note the change
+  (ADR-0005): `Deps` carries **`BuildSpecLoader func(Settings) SpecLoader`** — a wired-once factory —
+  **not** a ready `SpecLoader`, so the head can construct the loader late, bounded by the real
+  `cfg.Settings.Timeout`.
 - **io:** `none` (composition root — a pipe of already-tested parts)
-- **What it does:** the linear ROP pipe of `module-tree.md`; no branching of its own.
+- **What it does:** the linear ROP pipe of `module-tree.md`; no branching of its own. The one non-adapter
+  step it now performs is calling `d.BuildSpecLoader(cfg.Settings)` (a pure, total factory — never an
+  error step) to obtain the timeout-bounded `SpecLoader` before `loader.Load(cfg.Provider)`.
 - **Antecedent:** a valid `Invocation`.
 - **Consequent:**
   - Success: `Report` (schema-valid; `compatible ⇔ errors == []`).
@@ -90,12 +95,34 @@
   - Failure: `ErrFileNotFound` (missing/unreadable) → `FILE_NOT_FOUND`, exit 3; `ErrParse`
     (unparseable) → `PARSE_ERROR`, exit 3.
 
+### BuildSpecLoader (factory) — *late construction, ADR-0005*
+
+- **Signature:** `BuildSpecLoader(s: Settings) -> SpecLoader` (as a `Deps` field:
+  `BuildSpecLoader func(domain.Settings) SpecLoader`).
+- **Input (data):** the validated `cfg.Settings` (from `NewConfig`), whose `Timeout` is guaranteed `> 0`.
+- **Dependencies (deps):** — (a pure closure; the concrete wiring in `register.go` is
+  `func(s Settings) SpecLoader { return provider.NewSpecLoader(s.Timeout) }`).
+- **io:** `none` (a pure, **total** constructor call — never an error step; not unit-tested).
+- **What it does:** resolves the frozen-design contradiction **(a) "SpecLoader bounded by
+  settings.timeout"** vs **(b) "SpecLoader encapsulated, constructed once inside a fully-built Deps"**.
+  Resolution: keep (a); relax (b) — the *wired-once, encapsulated* object becomes this **factory**, and
+  the `SpecLoader` itself is built **once per invocation inside the head, after `NewConfig`**, receiving
+  `s.Timeout`. This removes the former `defaultProviderTimeoutSeconds = 30` hardcode (which made
+  `settings.timeout` inert and component scenario 6 unable to emit `TIMEOUT_ERROR`). `provider.NewSpecLoader(timeoutSeconds int)`
+  keeps its signature — only its **call site moves** from `register.go` (eager, hardcoded 30) into the
+  head via this factory (lazy, `cfg.Settings.Timeout`).
+- **Antecedent:** `Settings` valid-by-construction (`Timeout > 0`).
+- **Consequent:** Success: a `SpecLoader` whose HTTP branch is bounded by `s.Timeout`. No failure path.
+
 ### SpecLoader.Load
 
-- **Signature:** `Load(p: ProviderConfig) -> Result[ProviderSpec, Error]`
+- **Signature:** `Load(p: ProviderConfig) -> Result[ProviderSpec, Error]` *(unchanged — only the
+  construction lifecycle moved; see `BuildSpecLoader`, ADR-0005)*
 - **Input (data):** one `ProviderConfig` (`name` + `spec_path` XOR `spec_url`).
 - **Dependencies (deps):** — (`kin-openapi` loader + `*http.Client` + timeout + bearer token are
-  encapsulated inside the object; the head sees only `Load`)
+  encapsulated inside the object; the head sees only `Load`). The instance is **built late** by
+  `BuildSpecLoader(cfg.Settings)` inside the head — **not** pre-built in `Deps` — so its `timeout` is the
+  real `cfg.Settings.Timeout`, never a wiring-time default (ADR-0005).
 - **io:** `http` → designed with the **`http-io`** skill (timeout & payload budgets, provider spec as
   the frozen machine contract, real-protocol stub for component tests). ADR-0001.
 - **What it does:** acquire the provider OpenAPI (`spec_path` = local file OR `spec_url` = HTTP GET
@@ -229,6 +256,11 @@ those branches (5)` → total **6** (1 happy + 5).
 > exit 1) → **unit** boundaries of `DeriveProviderOperation` (R1) and `CompareOperation` (R2/R3/R4);
 > uncovered-provider-surface → informational report field (asserted inside scenario 1). Report-write
 > failure has no enum `error.code` → not counted.
+
+> **Delta (ADR-0005):** the scenario **count is unchanged (6)**. Scenario **6 (`TIMEOUT_ERROR`)** is now
+> **realizable**: because the `SpecLoader` is built late with `cfg.Settings.Timeout` (no hardcoded 30),
+> a `spec_url` stub that stalls past the config's `settings.timeout` actually trips `ErrTimeout`. The
+> stub/fixture must set `settings.timeout` low enough to fire deterministically against the stall delay.
 
 ### Gherkin outline (designed set — realization = `.feature` by `@wirth-tester`)
 

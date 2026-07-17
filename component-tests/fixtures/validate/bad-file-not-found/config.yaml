@@ -1,0 +1,11 @@
+# bad-file-not-found — one element added to the good base that triggers FILE_NOT_FOUND
+# (scenario 3): consumed_contract_path points at an artifact that does not exist on disk.
+consumer:
+  name: wallet-ui
+  consumed_contract_path: /fixtures/validate/bad-file-not-found/does-not-exist.json
+  operations:
+    - path: /accounts/{id}/balance
+      method: get
+provider:
+  name: balance-service
+  spec_path: /fixtures/validate/good/provider-openapi.yaml

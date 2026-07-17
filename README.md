@@ -61,7 +61,7 @@ pinout-openapi validate <config.yaml>
 
 The four rules: **R1** operation exists · **R2** `requires(provider) ⊆ sends(consumer)` (contravariant request) · **R3** `reads(consumer) ⊆ provides(provider)` (covariant response, catches field removal) · **R4** shared-field types match. Provider operations outside `consumer.operations` are listed as `uncovered_operations[]` — informational only, no verdict or exit effect.
 
-## Failure map (exit codes & error model)
+## Карта режимов отказа (failure map — exit codes & error model)
 
 Source: `report.schema.json` `x-exit-codes` + [`use-case.md`](docs/design/slice-01-validate/use-case.md) Extensions (1 Extension = 1 `error.code`). Exit **1 is a verdict** (the domain honestly said "no"), not a tool error; exits **2/3** are tool errors on the input side.
 

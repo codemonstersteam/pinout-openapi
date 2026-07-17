@@ -1,0 +1,12 @@
+# godog-раннер CLI. Запускается ТОЛЬКО в Docker (изоляция), не с хоста.
+# Экзекутит застейдженный бинарь из общего тома (TOOL_BIN) и проверяет exit/stdout.
+FROM golang:1.25-alpine
+RUN apk add --no-cache bash
+WORKDIR /tests
+COPY component-tests/go.mod ./
+COPY component-tests/go.sum* ./
+RUN go mod download
+COPY component-tests/steps ./steps
+COPY component-tests/features ./features
+ENV CGO_ENABLED=0
+ENTRYPOINT ["go", "test", "-v", "-count=1", "./steps/..."]

@@ -1,0 +1,14 @@
+# bad-http-error — one element added to the good base that triggers HTTP_ERROR (scenario 5):
+# provider.spec_url points at the real-protocol stub's /error route, which answers 503.
+# Reached by compose service name "provider-stub" (real HTTP, not an in-code mock).
+consumer:
+  name: wallet-ui
+  consumed_contract_path: /fixtures/validate/good/consumed-contract.json
+  operations:
+    - path: /accounts/{id}/balance
+      method: get
+provider:
+  name: balance-service
+  spec_url: http://provider-stub:8080/error
+settings:
+  timeout: 5

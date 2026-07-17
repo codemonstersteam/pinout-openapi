@@ -1,0 +1,35 @@
+# Компонентные тесты pinout-openapi (slice-01-validate). Запуск: ./scripts/run-tests.sh
+# Модель CLI (не сервис): tool = one-shot сборка+стейджинг бинаря в общий том,
+# tester = godog в контейнере, экзекутит бинарь из тома и проверяет exit/stdout, читая
+# fixtures/ (per-slice, bind-mounted read-only) для scenario 2-6. provider-stub — real-protocol
+# HTTP-стаб provider.spec_url (scenarios 5 HTTP_ERROR / 6 TIMEOUT_ERROR), не in-code mock.
+name: component-tests
+services:
+  tool:
+    build:
+      context: ..
+      dockerfile: component-tests/compose/tool.Dockerfile
+    volumes:
+      - bin:/out
+  provider-stub:
+    build:
+      context: ..
+      dockerfile: component-tests/compose/stub.Dockerfile
+    expose:
+      - "8080"
+  tester:
+    build:
+      context: ..
+      dockerfile: component-tests/Dockerfile.runtime
+    environment:
+      TOOL_BIN: /bin-share/tool
+    volumes:
+      - bin:/bin-share
+      - ./fixtures:/fixtures:ro
+    depends_on:
+      tool:
+        condition: service_completed_successfully
+      provider-stub:
+        condition: service_started
+volumes:
+  bin:

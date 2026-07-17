@@ -1,0 +1,49 @@
+openapi: 3.0.3
+info:
+  title: balance-service (provider) — good fixture, forward-compatible with consumer
+  version: 1.0.0
+paths:
+  /accounts/{id}/balance:
+    get:
+      operationId: getBalance
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [balance, currency]
+                properties:
+                  balance:  { type: integer }
+                  currency: { type: string }
+  /transfers:
+    post:
+      operationId: createTransfer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [from, to, amount]
+              properties:
+                from:   { type: string }
+                to:     { type: string }
+                amount: { type: integer }
+      responses:
+        "200":
+          description: created
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [transferId, status]
+                properties:
+                  transferId: { type: string }
+                  status:     { type: string }
