@@ -15,8 +15,8 @@ jobs:
     name: Unit tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
           cache-dependency-path: go.sum
@@ -31,7 +31,7 @@ jobs:
     name: Component tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       # Компонентные тесты гоняются целиком в Docker (docker compose предустановлен
       # на ubuntu-latest): tool стейджит бинарь, provider-stub поднимается detached,
       # результат прогона — код выхода контейнера tester.
