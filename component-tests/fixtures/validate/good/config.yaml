@@ -1,0 +1,16 @@
+# good-validate — minimal environment where the forward-compatibility check raises nothing
+# (scenario 1, happy path). consumer.operations covers only /accounts/{id}/balance:get;
+# the provider also exposes /transfers:post, which the report must surface as uncovered_operations[].
+consumer:
+  name: wallet-ui
+  consumed_contract_path: /fixtures/validate/good/consumed-contract.json
+  operations:
+    - path: /accounts/{id}/balance
+      method: get
+provider:
+  name: balance-service
+  spec_path: /fixtures/validate/good/provider-openapi.yaml
+settings:
+  save_json_report: true
+  json_report_file: /tmp/compatibility_report.json
+  timeout: 5

@@ -1,0 +1,13 @@
+# bad-config — one element added to the good base that triggers CONFIG_ERROR (scenario 2):
+# provider gives BOTH spec_path and spec_url, violating config.schema.json's oneOf
+# (provider source must be EXACTLY ONE of spec_path/spec_url) → CONFIG_ERROR, exit 2.
+consumer:
+  name: wallet-ui
+  consumed_contract_path: /fixtures/validate/good/consumed-contract.json
+  operations:
+    - path: /accounts/{id}/balance
+      method: get
+provider:
+  name: balance-service
+  spec_path: /fixtures/validate/good/provider-openapi.yaml
+  spec_url: https://provider-stub.invalid/openapi.yaml

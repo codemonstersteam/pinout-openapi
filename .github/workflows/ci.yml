@@ -1,0 +1,39 @@
+name: CI
+
+# Гейт качества на ПР в транк: юнит-тесты + компонентные тесты.
+on:
+  pull_request:
+    branches: [main]
+
+# Один активный прогон на ветку ПР — новый пуш отменяет предыдущий.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+      - name: Build
+        run: go build ./...
+      - name: Vet
+        run: go vet ./...
+      - name: Test
+        run: go test -race -count=1 ./...
+
+  component:
+    name: Component tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      # Компонентные тесты гоняются целиком в Docker (docker compose предустановлен
+      # на ubuntu-latest): tool стейджит бинарь, provider-stub поднимается detached,
+      # результат прогона — код выхода контейнера tester.
+      - name: Run component tests
+        run: ./component-tests/scripts/run-tests.sh

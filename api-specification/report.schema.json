@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://codemonsters.team/pinout-openapi/report.schema.json",
+  "title": "pinout-openapi compatibility report (output DTO)",
+  "description": "Machine-readable JSON report emitted on stdout (and, when settings.save_json_report, to settings.json_report_file) by `pinout-openapi validate`. Consumed by pinout-netlist/E2 for aggregation. Derived from FRD Data dictionary C + UC-1 (slice-01-validate). Error-element shape {code,message,location,details,context} mirrors the twin (pinout-asyncapi validator ValidationError). The process EXIT CODE (separate from this document) is fixed in x-exit-codes below. FROZEN: this is the sole output contract of the service.",
+  "x-frozen": "2026-07-16",
+  "x-target-shape": "cli",
+  "x-slices": ["slice-01-validate"],
+  "x-exit-codes": {
+    "description": "Canonical Result→exit mapping (cli-io grid, aligned with the twin pinout-asyncapi + operator decision OQ3). The exit code is the CLI's status line — the machine-readable serialization of the outcome; it is NOT a field of this report document. CONFIG_ERROR (exit 2) is a config-side breach detected before a report is written, so it never appears in errors[].code.",
+    "table": [
+      { "exit": 0, "class": "compatible",   "meaning": "contracts compatible (compatible == true, errors == [])", "codes": [] },
+      { "exit": 1, "class": "incompatible", "meaning": "a verdict: the domain honestly said no (contract broken)",  "codes": ["OP_NOT_IN_PROVIDER", "MISSING_REQUIRED_REQUEST_FIELD", "READS_FIELD_NOT_PROVIDED", "TYPE_MISMATCH"] },
+      { "exit": 2, "class": "config",        "meaning": "bad invocation / unreadable / schema-invalid config, or provider spec source not exactly-one", "codes": ["CONFIG_ERROR"] },
+      { "exit": 3, "class": "io-parse",      "meaning": "environment/spec: io or parse failure of an input artifact (consumed-contract or provider spec)", "codes": ["PARSE_ERROR", "FILE_NOT_FOUND", "HTTP_ERROR", "TIMEOUT_ERROR"] }
+    ]
+  },
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "compatible", "provenance", "errors"],
+  "properties": {
+    "schema_version": {
+      "const": "1.0",
+      "description": "Report-schema semver, for pinout-netlist/E2 aggregation."
+    },
+    "compatible": {
+      "type": "boolean",
+      "description": "Aggregate verdict. Invariant: compatible ⇔ errors == []. true ⇒ exit 0; false ⇒ exit 1."
+    },
+    "provenance": {
+      "type": "object",
+      "description": "Top-level echo of the consumed-contract stamp (OQ5).",
+      "additionalProperties": false,
+      "required": ["provider", "provider_version", "captured_hash"],
+      "properties": {
+        "provider": { "type": "string", "description": "Provider name." },
+        "provider_version": { "type": "string", "description": "Version stamp of the source spec." },
+        "captured_hash": { "type": "string", "pattern": "^sha256:", "description": "sha256:… hash of the captured spec." }
+      }
+    },
+    "errors": {
+      "type": "array",
+      "description": "All violations folded across operations (verdict codes F1–F4 at exit 1) and any input-side io/parse breach that produced a report (F6–F9 at exit 3). Empty ⇔ compatible.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["code", "message"],
+        "properties": {
+          "code": {
+            "type": "string",
+            "enum": [
+              "OP_NOT_IN_PROVIDER",
+              "MISSING_REQUIRED_REQUEST_FIELD",
+              "READS_FIELD_NOT_PROVIDED",
+              "TYPE_MISMATCH",
+              "PARSE_ERROR",
+              "FILE_NOT_FOUND",
+              "HTTP_ERROR",
+              "TIMEOUT_ERROR"
+            ],
+            "description": "Stable traceability key (FRD ↔ use-case ↔ contract). Verdict codes: OP_NOT_IN_PROVIDER (R1, F1), MISSING_REQUIRED_REQUEST_FIELD (R2, F2), READS_FIELD_NOT_PROVIDED (R3, F3), TYPE_MISMATCH (R4, F4) → exit 1. Io/parse codes: PARSE_ERROR (F6), FILE_NOT_FOUND (F7), HTTP_ERROR (F8), TIMEOUT_ERROR (F9) → exit 3. See x-exit-codes."
+          },
+          "message": { "type": "string", "description": "Human-readable message." },
+          "location": { "type": "string", "description": "`METHOD PATH` (the `at`) plus the field/parameter, when applicable." },
+          "details": { "type": "string", "description": "Detail (types, field name)." },
+          "context": { "type": "object", "description": "Extra structured diagnostics." }
+        }
+      }
+    },
+    "uncovered_operations": {
+      "type": "array",
+      "description": "Informational only (FRD F5d): provider operations outside consumer.operations. No effect on the verdict or the exit code.",
+      "items": { "type": "string" }
+    }
+  }
+}

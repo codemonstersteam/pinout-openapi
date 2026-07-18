@@ -46,6 +46,8 @@
   запроса и ответа, type-drift) → **5/5** вердиктов сошлись с гипотезой.
 - [`sandbox/check.mjs`](sandbox/check.mjs) — работающий референс-чекер (node + `js-yaml`); прод-версия
   переносит эту же алгебру на Go + `kin-openapi` (парсинг/`$ref`/рекурсивный субтайпинг дают глубину даром).
+- [`docs/CONCEPT.md`](docs/CONCEPT.md) — C4 (context/container) + функциональные алгоритмы forward/reverse;
+  тот же механизм `reads⊆provides` / `requires⊆sends`, согласован с песочницей.
 
 Реализатору: **алгоритм фиксирован песочницей**, задача E1 — перенести его на Go-стек честными библиотеками,
 а не переизобретать механизм сверки.
@@ -86,3 +88,12 @@
 
 Go + `cobra` (CLI) · `kin-openapi` (parse + `$ref` + валидация схем). Алгоритм сверки фиксирован песочницей
 (`sandbox/`); открыт лишь Go-носитель глубины (см. открытый вопрос 2). Остальное — предмет проработки.
+
+## Definition of done
+
+- `go build ./...` и `go vet ./...` — зелёные; команда `validate <config.yaml>` запускает реальный пайп (не `NOT_IMPLEMENTED`).
+- **6 компонентных сценариев** GREEN (1 happy-path + 5 adapter-веток: `CONFIG_ERROR`, `FILE_NOT_FOUND`, `PARSE_ERROR`, `HTTP_ERROR`, `TIMEOUT_ERROR`), тег `@wip` снят.
+- **24 unit-теста** ядра/модулей зелёные (сверка R1–R4: `requires ⊆ sends`, `reads ⊆ provides`, type-match).
+- Exit-коды соответствуют таксономии: `0` compatible · `1` verdict · `2` `CONFIG_ERROR` · `3` io/parse.
+- Отчёт валиден против `report.schema.json` (JSON в stdout), конфиг — против `config.schema.json`; обе схемы `x-frozen`.
+- Симметрия с `pinout-asyncapi` по конфигу/отчёту/exit-кодам сохранена.

@@ -1,0 +1,11 @@
+# bad-parse-error — one element added to the good base that triggers PARSE_ERROR
+# (scenario 4): provider.spec_path is reachable but its content is not valid OpenAPI/YAML.
+consumer:
+  name: wallet-ui
+  consumed_contract_path: /fixtures/validate/good/consumed-contract.json
+  operations:
+    - path: /accounts/{id}/balance
+      method: get
+provider:
+  name: balance-service
+  spec_path: /fixtures/validate/bad-parse-error/provider-invalid.yaml
