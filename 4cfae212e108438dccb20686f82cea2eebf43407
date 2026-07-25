@@ -1,0 +1,10 @@
+run: report-canon-doc
+weight: chore
+closed_at: 2026-07-25T13:52:14.523Z
+pr: https://github.com/codemonstersteam/pinout-openapi/pull/8
+merge: 863710203559c614fa57a8053ed76a6b9b66be92
+tag: none
+bump: no-bump
+reason: weight='chore' не бампается (chore/unclear версию не двигают)
+br: debt/01-report-canon-doc.md
+task: канон report-format v1.1 — единый формат отчёта валидатора
