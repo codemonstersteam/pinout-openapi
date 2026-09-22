@@ -188,15 +188,32 @@
 - **Consequent:** Success: `ComparisonOutcome{ Violations, UncoveredOps, Provenance }`
   (`compatible ⇔ Violations == []`). No failure path.
 
-### FoldReport
+### BuildReporter
 
-- **Signature:** `FoldReport(o: ComparisonOutcome) -> Report`
-- **Input (data):** one `ComparisonOutcome`.
-- **Dependencies (deps):** —
+- **Signature:** `BuildReporter(clock: Clock) -> Reporter`
+- **Input (data):** — (factory; binds the clock port)
+- **Dependencies (deps):** `domain.Clock`
 - **io:** `none`
-- **What it does:** shape the frozen `report.schema.json` DTO — `schema_version="1.0"`,
-  `compatible = Violations == []`, `errors[] = Violations`, top-level `provenance` echo,
-  informational `uncovered_operations[]`.
+- **What it does:** bind the orthogonal clock port into the Reporter collaborator **before** the
+  pipe (change 001-report-schema-1.1; D10 — `generated_at` is the canon's only non-additive part,
+  injected from above; the core never reads the system clock). A factory, not a pipe step — the
+  bind that removes arity from the pipe (ADR-001 of the async twin: factory and product method are
+  two nodes — the factory hides *where time comes from*, `Fold` hides *the report's shape*).
+- **Antecedent:** a wired `Deps.Clock`.
+- **Consequent:** Success: `Reporter`. No failure path.
+
+### Reporter.Fold
+
+- **Signature:** `Reporter.Fold(o: ComparisonOutcome) -> Report`
+- **Input (data):** one `ComparisonOutcome`.
+- **Dependencies (deps):** the clock bound by `BuildReporter`.
+- **io:** `none`
+- **What it does:** shape the canon-1.1 `report.schema.json` DTO — `schema_version="1.1"`,
+  build-time constants `validator="pinout-openapi"` / `interaction="sync"`, `consumer.name` from
+  `Outcome.ConsumerName`, `generated_at = clock.Now()` in RFC3339 UTC Z second precision (**the
+  slice's ONLY clock read**, exactly once per run — D10), `compatible = Violations == []`,
+  `errors[] = Violations` (subjects echoed verbatim — computed once in `CompareOperation`),
+  top-level `provenance` echo, informational `uncovered_operations[]`.
 - **Antecedent:** valid outcome.
 - **Consequent:** Success: schema-valid `Report`. No failure path.
 
@@ -231,25 +248,30 @@
 
 ## Component scenarios (DESIGN half — `@wip`, realized later by `@wirth-tester`)
 
-Formula `N = 1 (happy) + Σ distinguishable adapter branches`. Adapters here = **filesystem** (config,
-consumed-contract, `spec_path`, report) + **HTTP** (`spec_url`). A distinguishable branch ≡ one
-consumer-visible `error.code`. The four **verdict** codes (exit 1) are the domain core → **UNIT**
-tests over `CompareOperation`/`DeriveProviderOperation`, **not** component scenarios (ADR-0002).
-Input-validation Extensions (config schema-invalidity, `spec_*` not-exactly-one) → **UNIT** boundaries
-of `NewConfig`. Black box: assert **(exit code, stdout JSON)** against a config fixture in a container;
-`spec_url` reached via a **real-protocol HTTP stub** (`http-io`).
+Formula `N = 2 (happy-class: compatible verdict + incompatible verdict) + Σ distinguishable adapter
+branches`. Adapters here = **filesystem** (config, consumed-contract, `spec_path`, report) +
+**HTTP** (`spec_url`). A distinguishable branch ≡ one consumer-visible `error.code`. The four
+**verdict** codes (exit 1) are the domain core → **UNIT** tests over
+`CompareOperation`/`DeriveProviderOperation` (ADR-0002); the incompatible verdict itself is
+additionally asserted end-to-end by the second happy-class scenario via one representative rule
+(R1) — change 001-report-schema-1.1: canon 1.1's `errors[].subject` is observable only on a verdict
+(the same design act the async twin recorded in its task-001). Input-validation Extensions (config
+schema-invalidity, `spec_*` not-exactly-one) → **UNIT** boundaries of `NewConfig`. Black box:
+assert **(exit code, stdout JSON)** against a config fixture in a container; `spec_url` reached
+via a **real-protocol HTTP stub** (`http-io`).
 
 **Gate:** `#component_failure_scenarios (5) == #distinguishable adapter branches (5) == #error.codes of
-those branches (5)` → total **6** (1 happy + 5).
+those branches (5)` → total **7** (2 happy-class + 5).
 
 | # | Scenario (Cockburn wording verbatim) | Extension | Adapter branch (`error.code`) | exit | stdout | tag |
 |---|---|---|---|---|---|---|
-| 1 | happy: forward-compatible pair → report + `compatible=true` | MSS step 7 (F0) | — (SpecLoader + all loaders **success**) | 0 | schema-valid report, `errors=[]` | `@wip` |
-| 2 | Config not found, unreadable, malformed YAML, schema-invalid, or `spec_path`/`spec_url` not exactly-one | 1a | `CONFIG_ERROR` (ConfigStore read/YAML) | 2 | no report (config-side breach) | `@wip` |
-| 3 | `consumed-contract` or provider spec file missing / unreadable at its path | 2a | `FILE_NOT_FOUND` (ContractStore / SpecLoader file) | 3 | report w/ `errors[0].code=FILE_NOT_FOUND` | `@wip` |
-| 4 | `consumed-contract` or provider spec unparseable (invalid OpenAPI / YAML) | 2b | `PARSE_ERROR` (ContractStore / SpecLoader parse) | 3 | report w/ `errors[0].code=PARSE_ERROR` | `@wip` |
-| 5 | Provider `spec_url` unreachable (HTTP failure / non-2xx / connection refused) | 3a | `HTTP_ERROR` (SpecLoader HTTP) | 3 | report w/ `errors[0].code=HTTP_ERROR` | `@wip` |
-| 6 | Provider `spec_url` fetch exceeds `settings.timeout` seconds | 3b | `TIMEOUT_ERROR` (SpecLoader HTTP timeout) | 3 | report w/ `errors[0].code=TIMEOUT_ERROR` | `@wip` |
+| 1 | happy: forward-compatible pair → report + `compatible=true` | MSS step 7 (F0) | — (SpecLoader + all loaders **success**) | 0 | canon-1.1 report (`schema_version=1.1`, `validator`, `interaction`, `consumer.name`, `generated_at`), `errors=[]` | accepted |
+| 2 | incompatible verdict: scope includes an operation the provider does not expose (R1) | verdict (change 001) | — (domain, represented by R1) | 1 | report `compatible=false`, `errors[0].subject = "POST /accounts/{id}/close"` | accepted |
+| 3 | Config not found, unreadable, malformed YAML, schema-invalid, or `spec_path`/`spec_url` not exactly-one | 1a | `CONFIG_ERROR` (ConfigStore read/YAML) | 2 | no report (config-side breach) | accepted |
+| 4 | `consumed-contract` or provider spec file missing / unreadable at its path | 2a | `FILE_NOT_FOUND` (ContractStore / SpecLoader file) | 3 | report w/ `errors[0].code=FILE_NOT_FOUND` | accepted |
+| 5 | `consumed-contract` or provider spec unparseable (invalid OpenAPI / YAML) | 2b | `PARSE_ERROR` (ContractStore / SpecLoader parse) | 3 | report w/ `errors[0].code=PARSE_ERROR` | accepted |
+| 6 | Provider `spec_url` unreachable (HTTP failure / non-2xx / connection refused) | 3a | `HTTP_ERROR` (SpecLoader HTTP) | 3 | report w/ `errors[0].code=HTTP_ERROR` | accepted |
+| 7 | Provider `spec_url` fetch exceeds `settings.timeout` seconds | 3b | `TIMEOUT_ERROR` (SpecLoader HTTP timeout) | 3 | report w/ `errors[0].code=TIMEOUT_ERROR` | accepted |
 
 > **NOT component scenarios** (mapped elsewhere, do not inflate the count): Extensions **5a–5d**
 > (`OP_NOT_IN_PROVIDER`, `MISSING_REQUIRED_REQUEST_FIELD`, `READS_FIELD_NOT_PROVIDED`, `TYPE_MISMATCH`,
@@ -268,42 +290,43 @@ those branches (5)` → total **6** (1 happy + 5).
 @component @slice-01-validate
 Feature: Forward-compatibility validation of a consumer↔provider pair
 
-  @wip
   Scenario: forward-compatible pair yields a compatible report            # scenario 1 (happy)
     Given a config whose consumed-contract and provider spec are reachable and compatible
     When I run `pinout-openapi validate config.yaml`
     Then the exit code is 0
     And stdout is a schema-valid report with compatible=true and errors==[]
+    And stdout is a canon 1.1 report (schema_version, validator, interaction, consumer.name, generated_at)
     And uncovered provider operations are listed in uncovered_operations[]
 
-  @wip
+  Scenario: Consumer incompatible with provider (primary verdict)         # scenario 2 (incompatible verdict, change 001)
+    Given a config whose scope includes an operation the provider does not expose
+    When I run `pinout-openapi validate config.yaml`
+    Then the exit code is 1
+    And stdout report compatible=false with errors[0].subject naming the operation
+
   Scenario: Config not found, unreadable, malformed YAML, schema-invalid, or spec source not exactly-one
-    Given a config file that cannot be read or is schema-invalid          # scenario 2 (CONFIG_ERROR)
+    Given a config file that cannot be read or is schema-invalid          # scenario 3 (CONFIG_ERROR)
     When I run `pinout-openapi validate config.yaml`
     Then the exit code is 2
 
-  @wip
   Scenario: consumed-contract or provider spec file missing / unreadable at its path
     Given a config pointing at a consumed-contract path that does not exist  # scenario 3 (FILE_NOT_FOUND)
     When I run `pinout-openapi validate config.yaml`
     Then the exit code is 3
     And stdout report errors[0].code == "FILE_NOT_FOUND"
 
-  @wip
   Scenario: consumed-contract or provider spec unparseable (invalid OpenAPI / YAML)
     Given a config pointing at a provider spec that is not valid OpenAPI   # scenario 4 (PARSE_ERROR)
     When I run `pinout-openapi validate config.yaml`
     Then the exit code is 3
     And stdout report errors[0].code == "PARSE_ERROR"
 
-  @wip
   Scenario: Provider spec_url unreachable (HTTP failure / non-2xx / connection refused)
     Given a config with spec_url pointing at a stub that returns 503       # scenario 5 (HTTP_ERROR)
     When I run `pinout-openapi validate config.yaml`
     Then the exit code is 3
     And stdout report errors[0].code == "HTTP_ERROR"
 
-  @wip
   Scenario: Provider spec_url fetch exceeds settings.timeout seconds
     Given a config with spec_url pointing at a stub that stalls past settings.timeout  # scenario 6 (TIMEOUT_ERROR)
     When I run `pinout-openapi validate config.yaml`

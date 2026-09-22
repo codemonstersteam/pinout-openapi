@@ -1,0 +1,19 @@
+# incompatible — minimal mutation of good (scenario 7, the incompatible verdict):
+# consumer.operations additionally covers /accounts/{id}/close:post, which the provider
+# does not expose ⇒ R1 OP_NOT_IN_PROVIDER, exit 1, errors[0].subject = "POST /accounts/{id}/close".
+# Provider spec reused byte-for-byte from the good fixture (the twin's pattern).
+consumer:
+  name: wallet-ui
+  consumed_contract_path: /fixtures/validate/incompatible/consumed-contract.json
+  operations:
+    - path: /accounts/{id}/balance
+      method: get
+    - path: /accounts/{id}/close
+      method: post
+provider:
+  name: balance-service
+  spec_path: /fixtures/validate/good/provider-openapi.yaml
+settings:
+  save_json_report: true
+  json_report_file: /tmp/compatibility_report.json
+  timeout: 5

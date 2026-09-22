@@ -17,7 +17,6 @@ package validate
 
 import (
 	"log/slog"
-	"time"
 
 	"pinout-openapi/internal/validate/compare"
 	"pinout-openapi/internal/validate/config"
@@ -53,13 +52,10 @@ type ReportWriter interface {
 	Write(s domain.Settings, r domain.Report) (domain.Report, error)
 }
 
-// Clock — orthogonal tool listed in Deps by contracts.md §ProcessValidate (autonomous
-// I/O objects + orthogonal tools, no raw *os.File/*http.Client). Not called by the linear
-// pipe itself (module-tree.md pseudocode has no time step) — carried for downstream/future
-// use (e.g. logging timestamps) without widening this port beyond what a caller needs.
-type Clock interface {
-	Now() time.Time
-}
+// Clock — порт времени, перенесён в leaf-пакет domain (change 001-report-schema-1.1:
+// report.Reporter.Fold читает часы; пакет report не может импортировать validate).
+// Алиас оставлен, чтобы Deps и register.go ссылались на одно имя.
+type Clock = domain.Clock
 
 // Deps — the composition root's ports (contracts.md §ProcessValidate "Dependencies"):
 // autonomous I/O objects + orthogonal tools. The wiring ticket (17, register.go) supplies
@@ -95,6 +91,11 @@ type Deps struct {
 // Antecedent: a valid Invocation. Consequent: Ok Report (compatible ⇔ errors == []); Fail
 // any child's sentinel, short-circuited and risen untransformed (contracts.md §ProcessValidate).
 func ProcessValidate(inv domain.Invocation, d Deps) (domain.Report, error) {
+	// Bind-блок: коллабораторы, зависящие от окружения (а не от данных трубы),
+	// связываются ДО первого шага (правило «один вход данных»; D10 — часы читает
+	// только Reporter.Fold, ровно один раз на прогон).
+	reporter := report.BuildReporter(d.Clock)
+
 	raw, err := d.ConfigStore.Load(inv.ConfigPath)
 	if err != nil {
 		return domain.Report{}, err
@@ -123,7 +124,7 @@ func ProcessValidate(inv domain.Invocation, d Deps) (domain.Report, error) {
 	}
 
 	outcome := compare.CompareContracts(comparison)
-	rep := report.FoldReport(outcome)
+	rep := reporter.Fold(outcome)
 
 	written, err := d.ReportWriter.Write(cfg.Settings, rep)
 	if err != nil {

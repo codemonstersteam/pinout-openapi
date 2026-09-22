@@ -122,7 +122,7 @@ func runValidate(cmd *cobra.Command, args []string) error {
 // to the exit code, extended here to the report's errors[0].code string).
 func errorReport(err error) domain.Report {
 	return domain.Report{
-		SchemaVersion: "1.0",
+		SchemaVersion: "1.1",
 		Compatible:    false,
 		Errors:        []domain.Violation{{Code: errorCode(err), Message: err.Error()}},
 	}

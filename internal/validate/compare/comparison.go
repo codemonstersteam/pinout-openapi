@@ -16,9 +16,10 @@ import (
 // Error] is the Go idiom (T, error), err is always nil here.
 func NewComparison(cfg domain.Config, consumed domain.ConsumedContract, spec domain.ProviderSpec) (domain.Comparison, error) {
 	return domain.Comparison{
-		ScopedOps:  cfg.Operations,
-		Consumed:   consumed,
-		Spec:       spec,
-		Provenance: consumed.Provenance,
+		ScopedOps:    cfg.Operations,
+		Consumed:     consumed,
+		Spec:         spec,
+		Provenance:   consumed.Provenance,
+		ConsumerName: cfg.ConsumerName,
 	}, nil
 }

@@ -40,6 +40,7 @@ func CompareContracts(c domain.Comparison) domain.ComparisonOutcome {
 		Violations:   violations,
 		UncoveredOps: uncoveredOperations(c.Spec, c.ScopedOps),
 		Provenance:   c.Provenance,
+		ConsumerName: c.ConsumerName,
 	}
 }
 

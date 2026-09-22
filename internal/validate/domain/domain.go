@@ -6,9 +6,20 @@
 // адаптеры без import cycle).
 //
 // Формы полей взяты дословно из api-specification/config.schema.json (вход) и
-// api-specification/report.schema.json (выход) — см. docs/design/slice-01-validate/
-// {module-tree,contracts}.md. Ничего не придумано сверх зафиксированного контракта.
+// api-specification/report.schema.json (выход, канон 1.1 — docs/report-format.md) —
+// см. docs/design/slice-01-validate/{module-tree,contracts}.md. Ничего не придумано
+// сверх зафиксированного контракта.
 package domain
+
+import "time"
+
+// Clock — порт времени (канон 1.1, D10: generated_at инжектится сверху; ядро системные
+// часы не читает — единственный вызов Now() в слайсе делает Reporter.Fold через
+// полученный в BuildReporter порт). Здесь, а не в head: пакет report строит Report и
+// не может импортировать internal/validate (цикл).
+type Clock interface {
+	Now() time.Time
+}
 
 // Invocation — плоский DTO ingress-а (cli.Parse, ticket 04): единственное, что нужно
 // головной функции из argv. Путь к конфигу — только путь; сам файл читает ConfigStore.
@@ -127,21 +138,28 @@ type ProviderOperation struct {
 // Comparison — объединение трёх уже валидных входов в одну доменную сущность
 // (NewComparison, ticket 12; конструктор-объединитель — правило «2+ сущности ⇒
 // uniting constructor», без падающего антецедента). ScopedOps — cfg.Operations
-// (сфера сравнения); Consumed/Spec/Provenance — данные для CompareContracts.
+// (сфера сравнения); Consumed/Spec/Provenance — данные для CompareContracts;
+// ConsumerName — cfg.ConsumerName, протягиваемый до отчёта (канон 1.1:
+// consumer.name; change 001-report-schema-1.1).
 type Comparison struct {
-	ScopedOps  []OperationRef
-	Consumed   ConsumedContract
-	Spec       ProviderSpec
-	Provenance Provenance
+	ScopedOps    []OperationRef
+	Consumed     ConsumedContract
+	Spec         ProviderSpec
+	Provenance   Provenance
+	ConsumerName string
 }
 
 // Violation — одно нарушение форвард-совместимости (или io/parse-нарушение,
 // попавшее в отчёт) — форма 1:1 с report.schema.json#/properties/errors/items.
 // Code — один из четырёх verdict-кодов (errors.go) при exit 1, либо io/parse-код
-// при exit 3 (FoldReport/ReportWriter).
+// при exit 3 (Reporter.Fold/ReportWriter). Subject — «о чём нарушение» (канон 1.1):
+// для verdict-кодов обязателен, `METHOD /path` (метод UPPER, path байт-в-байт из
+// consumed-contract), префикс Location одним вычислением; у io/parse-кодов
+// опускается (omitempty), операции нет.
 type Violation struct {
 	Code     string         `json:"code"`
 	Message  string         `json:"message"`
+	Subject  string         `json:"subject,omitempty"`
 	Location string         `json:"location,omitempty"`
 	Details  string         `json:"details,omitempty"`
 	Context  map[string]any `json:"context,omitempty"`
@@ -150,19 +168,36 @@ type Violation struct {
 // ComparisonOutcome — итог чистого свёртывания CompareContracts (ticket 13) по всем
 // ScopedOps: Violations пуст ⇔ compatible; UncoveredOps — операции провайдера вне
 // scope (информационно, не влияют на вердикт/exit — report.schema.json
-// #/properties/uncovered_operations).
+// #/properties/uncovered_operations); ConsumerName — сквозной протяг из Comparison
+// для consumer.name отчёта.
 type ComparisonOutcome struct {
 	Violations   []Violation
 	UncoveredOps []string
 	Provenance   Provenance
+	ConsumerName string
+}
+
+// ReportConsumer — идентичность потребителя в отчёте (канон 1.1:
+// report.schema.json#/properties/consumer). Name — из config.consumer.name;
+// Version опционален и не эмитится вовсе, пока нет источника (канон: never a
+// placeholder).
+type ReportConsumer struct {
+	Name    string `json:"name"`
+	Version string `json:"version,omitempty"`
 }
 
 // Report — выходной DTO, печатаемый на stdout (и, при Settings.SaveJSONReport, в
-// файл) — форма 1:1 с report.schema.json. Инвариант: Compatible ⇔ len(Errors) == 0.
+// файл) — форма 1:1 с report.schema.json (канон 1.1). Инвариант:
+// Compatible ⇔ len(Errors) == 0. Validator/Interaction — константы сборки;
+// GeneratedAt проставляет Reporter.Fold через порт Clock (D10).
 type Report struct {
-	SchemaVersion       string      `json:"schema_version"`
-	Compatible          bool        `json:"compatible"`
-	Provenance          Provenance  `json:"provenance"`
-	Errors              []Violation `json:"errors"`
-	UncoveredOperations []string    `json:"uncovered_operations,omitempty"`
+	SchemaVersion       string         `json:"schema_version"`
+	Validator           string         `json:"validator"`
+	Interaction         string         `json:"interaction"`
+	Consumer            ReportConsumer `json:"consumer"`
+	GeneratedAt         string         `json:"generated_at"`
+	Compatible          bool           `json:"compatible"`
+	Provenance          Provenance     `json:"provenance"`
+	Errors              []Violation    `json:"errors"`
+	UncoveredOperations []string       `json:"uncovered_operations,omitempty"`
 }

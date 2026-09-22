@@ -45,7 +45,8 @@ ProcessValidate (head — ROP pipe, no branching)          internal/validate/hea
 │   ├── DeriveProviderOperation (logic: navigate spec)     internal/validate/provider/operation.go io: none [R1]
 │   └── CompareOperation (logic: R2/R3/R4 for one op)      internal/validate/compare/rules.go   io: none
 │         └── typesMatch (helper: R4 type equality)        internal/validate/compare/rules.go   io: none
-├── FoldReport           (logic: outcome → Report DTO)     internal/validate/report/build.go   io: none
+├── BuildReporter         (factory: bind clock port)      internal/validate/report/build.go   io: none  -- D10 (change 001): generated_at инжектится сверху
+├── Reporter.Fold         (logic: outcome → Report DTO 1.1) internal/validate/report/build.go io: none -- единственный clock.Now() в слайсе
 └── ReportWriter.Write   (I/O pipe: write JSON report)     internal/validate/report/writer.go  io: none
 
 cli.ResolveExitCode      (adapter: Result → exit + stdout) internal/validate/cli/exit.go       io: none
@@ -58,14 +59,15 @@ cli.ResolveExitCode      (adapter: Result → exit + stdout) internal/validate/c
 
 ```
 ProcessValidate(inv Invocation, d Deps) -> Result[Report, Error]:
+    reporter := BuildReporter(d.Clock)                  -- BIND (change 001, D10): порт часов связывается ДО трубы
     | d.ConfigStore.Load(inv.ConfigPath)             -> RawConfig         -- fs read     [ErrConfig     → CONFIG_ERROR / 2]
     | NewConfig(rawConfig)                           -> Config            -- validate    [ErrConfig     → CONFIG_ERROR / 2]
     | d.ContractStore.Load(cfg.ConsumedContractPath) -> ConsumedContract  -- fs+parse    [ErrFileNotFound → FILE_NOT_FOUND / 3, ErrParse → PARSE_ERROR / 3]
     | d.BuildSpecLoader(cfg.Settings)               -> loader            -- LATE construction: timeout = cfg.Settings.Timeout (NO hardcode); pure, total (ADR-0005)
     | loader.Load(cfg.Provider)                     -> ProviderSpec      -- kin-openapi [ErrFileNotFound/3, ErrParse/3, ErrHTTP → HTTP_ERROR/3, ErrTimeout → TIMEOUT_ERROR/3]
-    | NewComparison(cfg, consumed, spec)            -> Comparison        -- unite (scoped ops + sends/reads + provider ops + provenance)
-    | CompareContracts(comparison)                  -> ComparisonOutcome -- R1..R4 per op, folded; verdict codes are exit 1
-    | FoldReport(outcome)                           -> Report            -- compatible⇔errors==[]; provenance echo; uncovered_operations[]
+    | NewComparison(cfg, consumed, spec)            -> Comparison        -- unite (scoped ops + sends/reads + provider ops + provenance + consumer name)
+    | CompareContracts(comparison)                  -> ComparisonOutcome -- R1..R4 per op, folded; verdict codes are exit 1; subjects `METHOD /path`
+    | reporter.Fold(outcome)                        -> Report            -- канон 1.1: константы + consumer.name + generated_at (единственный Now()); compatible⇔errors==[]
     | d.ReportWriter.Write(cfg.Settings, report)    -> Report            -- write JSON iff settings.save_json_report (ROP pass-through)
     -> Ok(report)
 ```
@@ -144,18 +146,23 @@ constructors and pure logic are unit-tested:
 | `DeriveProviderOperation` | 1 | operation absent in provider (→ R1 `OP_NOT_IN_PROVIDER`) | 2 |
 | `CompareOperation` | 1 | R2 required **body** field not sent, R2 required **param** (path/query/header) not sent, R3 read field not provided, R4 type mismatch (request), R4 type mismatch (response) | 6 |
 | `CompareContracts` | 1 | multi-operation fold accumulation, `uncovered_operations[]` detection | 3 |
-| `FoldReport` | 1 | non-empty `errors` ⇒ `compatible=false`, `uncovered_operations[]` populated | 3 |
-| **Total** | | | **24** |
+| `FoldReport`→`Reporter.Fold` | 1 | non-empty `errors` ⇒ `compatible=false`, `uncovered_operations[]` populated; канон 1.1: константы/consumer.name/generated_at; якорь D10 (ровно 1 `Now()`) | 4 |
+| **Total** | | | **25** |
 
 > The four verdict codes are covered **here**, as `CompareOperation` unit boundaries (R2/R3/R4) +
-> `DeriveProviderOperation` (R1) — never as component scenarios (ADR-0002). The `body` vs
-> `path/query/header` equivalence for R2/R4 is unit-level (a `Request`-shaped boundary, lesson D1).
+> `DeriveProviderOperation` (R1); the incompatible verdict is ADDITIONALLY asserted end-to-end by
+> component scenario 2 (happy-class, one representative rule R1 — change 001-report-schema-1.1:
+> `errors[].subject` наблюдаем только на вердикте; тот же акт, что у async-близнеца в task-001).
+> The `body` vs `path/query/header` equivalence for R2/R4 is unit-level (a `Request`-shaped boundary, lesson D1).
 
-## Component-scenario count (`N = 1 happy + Σ distinguishable adapter branches`)
+## Component-scenario count (`N = 2 happy-class + Σ distinguishable adapter branches`)
 
-**6 scenarios** = 1 happy (compatible, exit 0) + 5 adapter branches (one per distinct io/config
-`error.code`): `CONFIG_ERROR` (2), `FILE_NOT_FOUND` (3), `PARSE_ERROR` (3), `HTTP_ERROR` (3),
-`TIMEOUT_ERROR` (3). The full set + Gherkin-mapping is designed in [`contracts.md`](./contracts.md)
-(tagged `@wip`); realization into `.feature` + harness is `@wirth-tester`, not this stage.
+**7 scenarios** = 2 happy-class (compatible exit 0; incompatible verdict exit 1 — added by change
+001-report-schema-1.1) + 5 adapter branches (one per distinct io/config `error.code`):
+`CONFIG_ERROR` (2), `FILE_NOT_FOUND` (3), `PARSE_ERROR` (3), `HTTP_ERROR` (3), `TIMEOUT_ERROR` (3).
+The full set + Gherkin-mapping is designed in [`contracts.md`](./contracts.md); realization into
+`.feature` + harness is `@wirth-tester`, not this stage.
+
+> Current as of change 001-report-schema-1.1 (lane minor)
 
 <!-- DONE: moduledesigner slice-01-validate -->

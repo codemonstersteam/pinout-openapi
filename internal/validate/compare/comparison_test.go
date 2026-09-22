@@ -47,10 +47,11 @@ func TestNewComparison_UnitesValidInputs(t *testing.T) {
 	}
 
 	want := domain.Comparison{
-		ScopedOps:  ops,
-		Consumed:   consumed,
-		Spec:       spec,
-		Provenance: provenance,
+		ScopedOps:    ops,
+		Consumed:     consumed,
+		Spec:         spec,
+		Provenance:   provenance,
+		ConsumerName: "pinout-cli",
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("NewComparison() = %+v, want %+v", got, want)
