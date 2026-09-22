@@ -5,6 +5,7 @@ package compare
 
 import (
 	"fmt"
+	"strings"
 
 	"pinout-openapi/internal/validate/domain"
 )
@@ -21,12 +22,17 @@ import (
 // providerOp == nil кодирует "NotPresent" (R1) — сигнал DeriveProviderOperation
 // (ticket 10, provider-пакет), без зависимости compare от provider-пакета.
 func CompareOperation(consumedOp domain.ConsumedOperation, providerOp *domain.ProviderOperation) []domain.Violation {
-	at := fmt.Sprintf("%s %s", consumedOp.Ref.Method, consumedOp.Ref.Path)
+	// Субъект нарушения (канон 1.1): `METHOD /path` — метод UPPER, один ASCII-пробел,
+	// path байт-в-байт как записан в consumed-contract. Вычисляется ОДИН раз и здесь:
+	// Subject и префикс Location — одна и та же строка (D11: не собирать второй конкат).
+	subject := fmt.Sprintf("%s %s", strings.ToUpper(consumedOp.Ref.Method), consumedOp.Ref.Path)
+	at := subject
 
 	if providerOp == nil {
 		return []domain.Violation{{
 			Code:     domain.CodeOpNotInProvider,
 			Message:  "operation not present in provider spec",
+			Subject:  subject,
 			Location: at,
 		}}
 	}
@@ -40,6 +46,7 @@ func CompareOperation(consumedOp domain.ConsumedOperation, providerOp *domain.Pr
 			violations = append(violations, domain.Violation{
 				Code:     domain.CodeMissingRequiredRequestField,
 				Message:  fmt.Sprintf("provider requires %q, consumer does not send it", field),
+				Subject:  subject,
 				Location: at,
 				Details:  field,
 			})
@@ -52,6 +59,7 @@ func CompareOperation(consumedOp domain.ConsumedOperation, providerOp *domain.Pr
 			violations = append(violations, domain.Violation{
 				Code:     domain.CodeTypeMismatch,
 				Message:  fmt.Sprintf("request field %q: consumer sends %s, provider expects %s", field, sentType, provType),
+				Subject:  subject,
 				Location: at,
 				Details:  field,
 			})
@@ -66,6 +74,7 @@ func CompareOperation(consumedOp domain.ConsumedOperation, providerOp *domain.Pr
 			violations = append(violations, domain.Violation{
 				Code:     domain.CodeReadsFieldNotProvided,
 				Message:  fmt.Sprintf("consumer reads %q, provider does not provide it", field),
+				Subject:  subject,
 				Location: at,
 				Details:  field,
 			})
@@ -75,6 +84,7 @@ func CompareOperation(consumedOp domain.ConsumedOperation, providerOp *domain.Pr
 			violations = append(violations, domain.Violation{
 				Code:     domain.CodeTypeMismatch,
 				Message:  fmt.Sprintf("response field %q: consumer reads %s, provider provides %s", field, readType, provType),
+				Subject:  subject,
 				Location: at,
 				Details:  field,
 			})

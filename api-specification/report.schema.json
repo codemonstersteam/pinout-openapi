@@ -2,10 +2,13 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://codemonsters.team/pinout-openapi/report.schema.json",
   "title": "pinout-openapi compatibility report (output DTO)",
-  "description": "Machine-readable JSON report emitted on stdout (and, when settings.save_json_report, to settings.json_report_file) by `pinout-openapi validate`. Consumed by pinout-netlist/E2 for aggregation. Derived from FRD Data dictionary C + UC-1 (slice-01-validate). Error-element shape {code,message,location,details,context} mirrors the twin (pinout-asyncapi validator ValidationError). The process EXIT CODE (separate from this document) is fixed in x-exit-codes below. FROZEN: this is the sole output contract of the service.",
-  "x-frozen": "2026-07-16",
+  "description": "Machine-readable JSON report emitted on stdout (and, when settings.save_json_report, to settings.json_report_file) by `pinout-openapi validate`. Consumed by pinout-netlist/E2 for aggregation. Shape = report canon 1.1 (docs/report-format.md, the ecosystem-wide source of truth; decision record: pinout/debt/report-canon-fork.md, operator variant A, 2026-07-25). 1.1 is an ADDITIVE superset of the actually-frozen flat 1.0: it adds validator / interaction / consumer / generated_at / errors[].subject, and declares provenance the single source of provider identity. The process EXIT CODE (separate from this document) is fixed in x-exit-codes below. FROZEN: this is the sole output contract of the service.",
+  "x-frozen": "2026-09-22",
+  "x-schema-version": "1.1",
   "x-target-shape": "cli",
   "x-slices": ["slice-01-validate"],
+  "x-canon": "docs/report-format.md (canon 1.1; owner epic E1). Divergence from the canon is a defect of this file, not of the canon.",
+  "x-twin": "pinout-asyncapi/api-specification/report.schema.json — known drift: the twin lists errors[].subject in items.required while its exit-3 envelope omits it (twin debt N1); this schema follows the canon (subject required for verdict codes, omitted for io/parse, hence not in items.required).",
   "x-exit-codes": {
     "description": "Canonical Result→exit mapping (cli-io grid, aligned with the twin pinout-asyncapi + operator decision OQ3). The exit code is the CLI's status line — the machine-readable serialization of the outcome; it is NOT a field of this report document. CONFIG_ERROR (exit 2) is a config-side breach detected before a report is written, so it never appears in errors[].code.",
     "table": [
@@ -17,11 +20,35 @@
   },
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "compatible", "provenance", "errors"],
+  "required": ["schema_version", "validator", "interaction", "consumer", "generated_at", "compatible", "provenance", "errors"],
   "properties": {
     "schema_version": {
-      "const": "1.0",
-      "description": "Report-schema semver, for pinout-netlist/E2 aggregation."
+      "const": "1.1",
+      "description": "Report-canon semver, so pinout-netlist can dispatch its reader by version. Bumped 1.0→1.1 by the additive canon delta (new fields: validator, interaction, consumer, generated_at, errors[].subject)."
+    },
+    "validator": {
+      "const": "pinout-openapi",
+      "description": "Which validator produced this report (canon enum: pinout-openapi | pinout-asyncapi). A build-time constant, never a config value."
+    },
+    "interaction": {
+      "const": "sync",
+      "description": "Interaction kind of the validated pair (canon enum: sync | async). A build-time constant."
+    },
+    "consumer": {
+      "type": "object",
+      "description": "Identity of the consuming side, from the consumer's own config (config.consumer.name). The report's only consumer-identity source.",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "description": "Consumer name (Config.ConsumerName)." },
+        "version": { "type": "string", "minLength": 1, "description": "OPTIONAL. Emitted only when actually known; never a placeholder. This validator has no source for it, so it is omitted entirely (never null or empty)." }
+      }
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+      "description": "When the report was produced. RFC 3339, UTC (Z), second precision, no fractional seconds, no offset. INJECTED FROM ABOVE through the clock port (D10) — the core never reads the system clock; the whole slice reads the clock exactly once (inside Reporter.Fold)."
     },
     "compatible": {
       "type": "boolean",
@@ -29,7 +56,7 @@
     },
     "provenance": {
       "type": "object",
-      "description": "Top-level echo of the consumed-contract stamp (OQ5).",
+      "description": "Top-level echo of the consumed-contract stamp (OQ5). The SINGLE source of provider identity in the canon — there is deliberately no separate provider{} block.",
       "additionalProperties": false,
       "required": ["provider", "provider_version", "captured_hash"],
       "properties": {
@@ -40,7 +67,7 @@
     },
     "errors": {
       "type": "array",
-      "description": "All violations folded across operations (verdict codes F1–F4 at exit 1) and any input-side io/parse breach that produced a report (F6–F9 at exit 3). Empty ⇔ compatible.",
+      "description": "All violations folded across operations (verdict codes F1–F4 at exit 1) and any input-side io/parse breach that produced a report (F6–F9 at exit 3). Empty ⇔ compatible. Flat list — grouping into verdicts[] is the rejected variant B; subject-level granularity is carried by errors[].subject.",
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -61,7 +88,12 @@
             "description": "Stable traceability key (FRD ↔ use-case ↔ contract). Verdict codes: OP_NOT_IN_PROVIDER (R1, F1), MISSING_REQUIRED_REQUEST_FIELD (R2, F2), READS_FIELD_NOT_PROVIDED (R3, F3), TYPE_MISMATCH (R4, F4) → exit 1. Io/parse codes: PARSE_ERROR (F6), FILE_NOT_FOUND (F7), HTTP_ERROR (F8), TIMEOUT_ERROR (F9) → exit 3. See x-exit-codes."
           },
           "message": { "type": "string", "description": "Human-readable message." },
-          "location": { "type": "string", "description": "`METHOD PATH` (the `at`) plus the field/parameter, when applicable." },
+          "subject": {
+            "type": "string",
+            "minLength": 1,
+            "description": "What the violation is ABOUT — the graph-edge granularity pinout-netlist keys on (one subject = one edge). For verdict codes (exit 1) it is REQUIRED: the sync subject `METHOD /path` — uppercase method, one ASCII space, path byte-for-byte as recorded in the consumed contract (e.g. `GET /wallets/{id}`). It is the PREFIX of location, extracted from the same single computation, never composed a second time by hand. For io/parse codes (exit 3) there is no operation/channel identified, so the key is omitted."
+          },
+          "location": { "type": "string", "description": "`METHOD PATH` (the subject) plus the field/parameter, when applicable. Always starts with the subject." },
           "details": { "type": "string", "description": "Detail (types, field name)." },
           "context": { "type": "object", "description": "Extra structured diagnostics." }
         }

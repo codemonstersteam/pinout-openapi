@@ -14,8 +14,8 @@ It compares a consumer's typed `consumed-contract` against the provider's master
 - Compare body **and** path/query/header parameters per operation.
 - Apply four forward-compatibility rules (R1–R4) over each operation.
 - Load the provider spec from a local file **or** an HTTP(S) URL.
-- Emit a schema-valid JSON report for `pinout-netlist`/E2 aggregation.
-- Run offline, deterministically: same input bytes ⇒ same report bytes.
+- Emit a schema-valid JSON report (canon 1.1) for `pinout-netlist`/E2 aggregation.
+- Run offline, deterministically: same input bytes ⇒ same report bytes — `generated_at` is the only time dependence, injected through a clock port (canon D10), never read from the system clock inside the core.
 
 **Cannot:**
 
@@ -39,7 +39,7 @@ It compares a consumer's typed `consumed-contract` against the provider's master
 
 ## Command
 
-Source of truth: [`api-specification/config.schema.json`](api-specification/config.schema.json) (input DTO) and [`api-specification/report.schema.json`](api-specification/report.schema.json) (output DTO + exit-code grid), both `x-frozen: 2026-07-16`.
+Source of truth: [`api-specification/config.schema.json`](api-specification/config.schema.json) (input DTO) and [`api-specification/report.schema.json`](api-specification/report.schema.json) (output DTO + exit-code grid, `x-frozen: 2026-09-22`). The report's shape is the ecosystem-wide **canon 1.1**: [`docs/report-format.md`](docs/report-format.md) — the single written source of truth every `pinout` validator and `pinout-netlist` align against.
 
 | Command | Args | Action |
 |---|---|---|
@@ -54,8 +54,8 @@ pinout-openapi validate <config.yaml>
 | Read + schema-validate config (YAML)                        [CONFIG_ERROR → 2]
 | Load consumer consumed-contract (typed {sends, reads})     [FILE_NOT_FOUND, PARSE_ERROR → 3]
 | Acquire + parse provider spec (kin-openapi, path XOR url)  [FILE_NOT_FOUND, PARSE_ERROR, HTTP_ERROR, TIMEOUT_ERROR → 3]
-| Derive {requires, provides} per operation; apply R1..R4    [OP_NOT_IN_PROVIDER, MISSING_REQUIRED_REQUEST_FIELD, READS_FIELD_NOT_PROVIDED, TYPE_MISMATCH → 1]
-| Fold violations → Report (compatible ⇔ errors == [])
+| Derive {requires, provides} per operation; apply R1..R4    [OP_NOT_IN_PROVIDER, MISSING_REQUIRED_REQUEST_FIELD, READS_FIELD_NOT_PROVIDED, TYPE_MISMATCH → 1; each error carries its subject `METHOD /path`]
+| Fold violations → Report (canon 1.1: validator/interaction/consumer/generated_at; compatible ⇔ errors == [])
 | Print JSON report to stdout (+ file iff save_json_report)  → exit 0 | 1 | 2 | 3
 ```
 
@@ -72,13 +72,13 @@ Source: `report.schema.json` `x-exit-codes` + [`use-case.md`](docs/design/slice-
 | 2 | config | bad invocation / unreadable / schema-invalid config, or provider source not exactly-one | `CONFIG_ERROR` |
 | 3 | io·parse | io or parse failure of an input artifact (consumed-contract or provider spec) | `PARSE_ERROR`, `FILE_NOT_FOUND`, `HTTP_ERROR`, `TIMEOUT_ERROR` |
 
-Each `errors[]` element has the shape `{ code, message, location, details, context }` — `location` is `METHOD PATH` plus the field/parameter. `CONFIG_ERROR` is detected before a report is written, so it drives exit 2 but never appears in `errors[].code`. Rule: anything unchecked or degraded is **visible** in the report (`compatible == false` with an `errors[]` entry, or a non-zero exit) — never masked as success.
+Each `errors[]` element has the shape `{ code, message, subject, location, details, context }` — `subject` is what the violation is about (`METHOD /path`, the `pinout-netlist` edge key), and `location` is that subject plus the field/parameter. The full field-by-field report format is specified by the canon: [`docs/report-format.md`](docs/report-format.md). `CONFIG_ERROR` is detected before a report is written, so it drives exit 2 but never appears in `errors[].code`. Rule: anything unchecked or degraded is **visible** in the report (`compatible == false` with an `errors[]` entry, or a non-zero exit) — never masked as success.
 
 ## Build & run
 
 ```bash
 # Build the binary
-go build -o pinout-openapi ./cmd/pinout-openapi
+go build -o pinout-openapi ./cmd/app
 
 # Run the check (exit code is the machine verdict; JSON report on stdout)
 ./pinout-openapi validate ./config.yaml
@@ -88,7 +88,7 @@ echo "exit: $?"
 PINOUT_PROVIDER_TOKEN=… ./pinout-openapi validate ./config.yaml
 ```
 
-Behaviour from outside the binary is proven by [`component-tests/`](component-tests/) (6 black-box scenarios: 1 happy + one per io/config `error.code`).
+Behaviour from outside the binary is proven by [`component-tests/`](component-tests/) (7 black-box scenarios: 2 happy-class — compatible and the incompatible verdict — plus one per io/config `error.code`).
 
 ## Learn more (retrievability ladder)
 
